@@ -1,0 +1,35 @@
+{
+  "models": {
+    "default": "deepseek-r1:1.5b"
+  },
+  "modules": [
+    {
+      "name": "history",
+      "function": "generate_history",
+      "model": "deepseek-r1:1.5b",
+      "priority": 1
+    },
+    {
+      "name": "faction",
+      "function": "generate_factions",
+      "model": "deepseek-r1:1.5b",
+      "priority": 2
+    },
+    {
+      "name": "exterior",
+      "function": "generate_exterior",
+      "model": "deepseek-r1:1.5b",
+      "priority": 3
+    },
+    {
+      "name": "dungeon_map",
+      "function": "generate_dungeon_map",
+      "model": null,
+      "priority": 4,
+      "num_dice": 11
+    }
+  ],
+  "output": {
+    "file": "dungeon_documentation.md"
+  }
+}
