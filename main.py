@@ -1,12 +1,10 @@
-# main.py
 import logging
 import json
 import importlib
 import asyncio
-import re
 import random
 from schema import Schema, And, Or, Optional, SchemaError
-from ollama_manager import initialize_service, check_model_installed, get_installed_models
+from ollama_manager import initialize_service, get_installed_models
 from modules.output_writer import write_markdown
 
 # Configure logging
@@ -37,7 +35,6 @@ config_schema = Schema({
     }
 })
 
-
 async def process_module(module_info, output_data, config):
     module_name = module_info['name']
     function_name = module_info['function']
@@ -58,6 +55,7 @@ async def process_module(module_info, output_data, config):
         'faction_content': lambda: "\n\n".join(
             f["content"] for f in output_data.get('faction', {}).get('factions', [])
         ),
+        'exterior_content': lambda: output_data.get('exterior', {}).get('content', ''),
         'num_dice': lambda: (
             logging.debug(f"🎲 Map using {module_info.get('num_dice', 11)} dice"),
             module_info.get('num_dice', 11)
@@ -109,19 +107,41 @@ async def process_module(module_info, output_data, config):
                 logging.warning(f"🔄 Retrying {module_name} ({attempt}/{max_retries})")
                 await asyncio.sleep(1 * attempt)
 
-
 async def main():
     config = build_config()
     if not config:
         return
 
-    # Ensure the Ollama service is running before proceeding.
-    from ollama_manager import initialize_service  # Ensure we have the function imported.
     if not initialize_service():
         logging.error("❌ Failed to initialize Ollama service. Exiting.")
         return
 
     output_data = {}
+
+    # User input section with explicit history handling
+    generate_history = input("📜 Generate history automatically? (yes/no): ").strip().lower() == "yes"
+    generate_faction = input("🤼 Generate factions automatically? (yes/no): ").strip().lower() == "yes"
+    generate_exterior = input("🌅 Generate exterior automatically? (yes/no): ").strip().lower() == "yes"
+
+    # Handle manual history input
+    if not generate_history:
+        output_data['history'] = {
+            'content': input("Enter dungeon history (press Enter when done):\n"),
+            'metadata': {'source': 'manual_input'}
+        }
+
+    # Handle other manual inputs
+    if not generate_faction:
+        output_data['faction'] = {
+            'factions': [{'content': input("Enter faction details: ")}],
+            'metadata': {'source': 'manual_input'}
+        }
+
+    if not generate_exterior:
+        output_data['exterior'] = {
+            'content': input("Enter exterior description: "),
+            'metadata': {'source': 'manual_input'}
+        }
 
     # Model initialization with fallback
     models = config['models']
@@ -136,11 +156,21 @@ async def main():
             logging.error("❌ No valid models available")
             return
 
+    # Filter out modules based on user choices
+    filtered_modules = [
+        mod for mod in config['modules']
+        if not (
+                (mod['name'] == 'history' and not generate_history) or
+                (mod['name'] == 'faction' and not generate_faction) or
+                (mod['name'] == 'exterior' and not generate_exterior)
+        )
+    ]
+
     # Process modules strategically
     independent = []
     dependent = []
 
-    for module in sorted(config['modules'], key=lambda x: x['priority']):
+    for module in sorted(filtered_modules, key=lambda x: x['priority']):
         if not module.get('depends_on'):
             independent.append(module)
         else:
@@ -164,7 +194,6 @@ async def main():
         sanitize=sanitize
     )
 
-
 def build_config():
     try:
         with open("config.json") as f:
@@ -173,7 +202,6 @@ def build_config():
     except (FileNotFoundError, json.JSONDecodeError, SchemaError) as e:
         logging.error(f"❌ Config error: {str(e)}")
         return None
-
 
 if __name__ == "__main__":
     asyncio.run(main())

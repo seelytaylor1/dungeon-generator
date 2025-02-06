@@ -25,6 +25,8 @@ ROOM_FEATURES = [
     'Treasure', 'Trap', 'Secret Door',
     'Puzzle', 'Monster Encounter', 'Hidden Passage'
 ]
+POSITION_JITTER = 4.0  # Max position variation from cluster center
+CLUSTER_SPREAD = 6.0   # Max distance between cluster centers
 
 # Data Structures =============================================================
 @dataclass
@@ -47,31 +49,45 @@ class Edge:
 
 def simulate_dice_drops() -> List[Node]:
     """
-    Generate a fixed set of node positions corresponding to:
-      2 x d4, 2 x d6, 2 x d8, 2 x d10, 2 x d12, and 1 x d20.
+    Generate nodes with clustered positions for loops and random placement for others.
     """
-    dice_counts = {
-        'd4': 2,
-        'd6': 2,
-        'd8': 2,
-        'd10': 2,
-        'd12': 2,
-        'd20': 1
-    }
+    dice_counts = {'d4': 2, 'd6': 2, 'd8': 2, 'd10': 2, 'd12': 2, 'd20': 2}
     nodes = []
+
+    # Create overlapping cluster centers
+    main_center = (random.uniform(8, 12), random.uniform(10, 14))
+    red_center = (
+        main_center[0] + random.uniform(-CLUSTER_SPREAD/2, CLUSTER_SPREAD/2),
+        main_center[1] + random.uniform(-CLUSTER_SPREAD/2, CLUSTER_SPREAD/2)
+    )
+    blue_center = (
+        main_center[0] + random.uniform(-CLUSTER_SPREAD/2, CLUSTER_SPREAD/2),
+        main_center[1] + random.uniform(-CLUSTER_SPREAD/2, CLUSTER_SPREAD/2)
+    )
+
     for dice, count in dice_counts.items():
-        for _ in range(count):
-            node = Node(
+        for i in range(count):
+            # Cluster loop nodes
+            if dice in ['d6', 'd8', 'd10', 'd12', 'd20']:
+                center = red_center if i == 0 else blue_center
+                x = center[0] + random.uniform(-POSITION_JITTER, POSITION_JITTER)
+                y = center[1] + random.uniform(-POSITION_JITTER, POSITION_JITTER)
+            else:  # Non-loop nodes get semi-random placement
+                base_x = main_center[0] + random.uniform(-CLUSTER_SPREAD, CLUSTER_SPREAD)
+                base_y = main_center[1] + random.uniform(-CLUSTER_SPREAD, CLUSTER_SPREAD)
+                x = base_x + random.uniform(-POSITION_JITTER, POSITION_JITTER)
+                y = base_y + random.uniform(-POSITION_JITTER, POSITION_JITTER)
+
+            nodes.append(Node(
                 id=str(uuid.uuid4()),
                 dice=dice,
-                room_type="",  # To be set in _process_nodes
-                position=(random.uniform(0, 16), random.uniform(0, 22)),
+                room_type="",
+                position=(x, y),
                 sub_nodes=[],
                 is_entrance=False,
                 key=None,
                 features=[]
-            )
-            nodes.append(node)
+            ))
     return nodes
 
 def _process_nodes(nodes: List[Node]) -> List[Node]:
@@ -79,243 +95,206 @@ def _process_nodes(nodes: List[Node]) -> List[Node]:
     for i, node in enumerate(nodes, start=1):
         node.room_type = DICE_ROOM_TYPES[node.dice]
         node.features = random.sample(ROOM_FEATURES, random.randint(0, 2))
-        # Assign a human-friendly key (e.g., "Room 1")
         node.key = f"Room {i}"
-        # Designate an entrance if no node is yet an entrance and if the node is a d4 (small room)
         if node.dice == 'd4' and not any(n.is_entrance for n in nodes):
             node.is_entrance = True
     return nodes
 
 def segment_intersection(a: Tuple[float, float], b: Tuple[float, float],
                          c: Tuple[float, float], d: Tuple[float, float]) -> Optional[Tuple[float, float]]:
-    """
-    Check if line segment ab intersects cd.
-    Returns the intersection point (x, y) if they intersect (and not at endpoints), else None.
-    """
+    """Detect segment intersections with endpoint checking."""
     def ccw(A, B, C):
         return (C[1]-A[1])*(B[0]-A[0]) > (B[1]-A[1])*(C[0]-A[0])
 
-    if ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d):
-        A = np.array(a)
-        B = np.array(b)
-        C = np.array(c)
-        D = np.array(d)
-        BA = B - A
-        DC = D - C
-        denominator = BA[0] * DC[1] - BA[1] * DC[0]
-        if denominator == 0:
-            return None  # Parallel lines
-        t = ((C[0] - A[0]) * DC[1] - (C[1] - A[1]) * DC[0]) / denominator
-        inter_point = A + t * BA
-        # Exclude intersections exactly at endpoints
-        if (np.allclose(inter_point, A) or np.allclose(inter_point, B) or
-                np.allclose(inter_point, C) or np.allclose(inter_point, D)):
-            return None
-        return (float(inter_point[0]), float(inter_point[1]))
+    intersect = ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d)
+    if not intersect:
+        return None
+
+    # Calculate intersection point
+    A = np.array(a)
+    B = np.array(b)
+    C = np.array(c)
+    D = np.array(d)
+    BA = B - A
+    DC = D - C
+    denom = BA[0] * DC[1] - BA[1] * DC[0]
+    if denom == 0:
+        return None  # Parallel
+
+    t = ((C[0] - A[0]) * DC[1] - (C[1] - A[1]) * DC[0]) / denom
+    u = ((C[0] - A[0]) * BA[1] - (C[1] - A[1]) * BA[0]) / denom
+    if 0 < t < 1 and 0 < u < 1:
+        return (float(A[0] + t * BA[0]), float(A[1] + t * BA[1]))
     return None
 
 def create_loops_and_connect(nodes: List[Node]) -> Tuple[List[Edge], List[Dict[str, Any]]]:
-    """
-    Create loops using the following procedure:
-      - For a complete set, form a loop that connects: d6 -> d8 -> d10 -> d12 -> d20, then back to the starting d6.
-      - If there are 10+ nodes and at least one complete set exists, form as many loops as possible.
-    Then, for any nodes not used in a loop (free-floating), connect each to its nearest neighbor.
-    Also, detect intersections between edges (which indicate junctions/traversals).
-    Returns a tuple: (list of edges, list of junction records).
-    """
+    """Create interconnected loops with organic connections."""
     edges: List[Edge] = []
     junctions: List[Dict[str, Any]] = []
     loops = []
-
-    # Group nodes by dice type
     nodes_by_dice = {d: [] for d in DICE_TYPES}
+
     for node in nodes:
         nodes_by_dice[node.dice].append(node)
 
-    # Determine the number of complete loops we can form
-    num_loops = min(
-        len(nodes_by_dice['d6']),
-        len(nodes_by_dice['d8']),
-        len(nodes_by_dice['d10']),
-        len(nodes_by_dice['d12']),
-        len(nodes_by_dice['d20'])
-    )
-    # Form loops only if there are at least 10 nodes and at least one complete set exists.
-    if len(nodes) >= 10 and num_loops > 0:
-        for i in range(num_loops):
-            d6_node = nodes_by_dice['d6'][i]
-            d8_node = nodes_by_dice['d8'][i]
-            d10_node = nodes_by_dice['d10'][i]
-            d12_node = nodes_by_dice['d12'][i]
-            d20_node = nodes_by_dice['d20'][i]
-            # Create loop edges:
-            edges.append(Edge(start_id=d6_node.id, end_id=d8_node.id))
-            edges.append(Edge(start_id=d8_node.id, end_id=d10_node.id))
-            edges.append(Edge(start_id=d10_node.id, end_id=d12_node.id))
-            edges.append(Edge(start_id=d12_node.id, end_id=d20_node.id))
-            edges.append(Edge(start_id=d20_node.id, end_id=d6_node.id))
+    # Create red and blue loops
+    for color in ['red', 'blue']:
+        try:
+            loop_nodes = [
+                nodes_by_dice['d6'][0 if color == 'red' else 1],
+                nodes_by_dice['d8'][0 if color == 'red' else 1],
+                nodes_by_dice['d10'][0 if color == 'red' else 1],
+                nodes_by_dice['d12'][0 if color == 'red' else 1],
+                nodes_by_dice['d20'][0 if color == 'red' else 1]
+            ]
+
+            # Create loop edges with occasional shortcuts
+            for i in range(len(loop_nodes)):
+                start = loop_nodes[i]
+                end = loop_nodes[(i+1)%len(loop_nodes)]
+                edges.append(Edge(start.id, end.id))
+
+                # 30% chance to add a cross-loop connection
+                if random.random() < 0.3 and i < len(loop_nodes)-1:
+                    edges.append(Edge(start.id, loop_nodes[i+2].id))
+
             loops.append({
-                'loop_keys': [d6_node.key, d8_node.key, d10_node.key, d12_node.key, d20_node.key],
-                'node_ids': [d6_node.id, d8_node.id, d10_node.id, d12_node.id, d20_node.id]
+                'color': color,
+                'node_ids': [n.id for n in loop_nodes],
+                'keys': [n.key for n in loop_nodes]
             })
+        except IndexError:
+            logger.warning(f"Missing nodes for {color} loop")
 
-    # Identify free nodes (not used in any loop)
+    # Connect closest nodes between loops
+    red_nodes = [n for loop in loops if loop['color'] == 'red' for n in loop['node_ids']]
+    blue_nodes = [n for loop in loops if loop['color'] == 'blue' for n in loop['node_ids']]
+
+    if red_nodes and blue_nodes:
+        closest_pair = min(
+            [(r, b) for r in red_nodes for b in blue_nodes],
+            key=lambda pair: math.dist(
+                next(n.position for n in nodes if n.id == pair[0]),
+                next(n.position for n in nodes if n.id == pair[1])
+            )
+        )
+        edges.append(Edge(*closest_pair))
+
+    # Connect free nodes with bias towards nearby clusters
     used_ids = {nid for loop in loops for nid in loop['node_ids']}
-    free_nodes = [node for node in nodes if node.id not in used_ids]
+    free_nodes = [n for n in nodes if n.id not in used_ids]
 
-    # Connect each free-floating node to its nearest neighbor.
     for free in free_nodes:
-        closest = None
-        min_dist = float('inf')
-        for node in nodes:
-            if node.id == free.id:
-                continue
-            dist = np.linalg.norm(np.array(free.position) - np.array(node.position))
-            if dist < min_dist:
-                min_dist = dist
-                closest = node
-        if closest:
-            edges.append(Edge(start_id=free.id, end_id=closest.id))
+        candidates = [
+            n for n in nodes
+            if n.id != free.id
+               and (n.dice in ['d6', 'd8', 'd10'] or random.random() < 0.4)
+        ]
+        if candidates:
+            closest = min(candidates,
+                          key=lambda n: math.dist(free.position, n.position))
+            edges.append(Edge(free.id, closest.id))
 
-    # Detect intersections (junctions/traversals) between edges.
+    # Detect intersections
     for i in range(len(edges)):
-        for j in range(i + 1, len(edges)):
-            e1 = edges[i]
-            e2 = edges[j]
-            # Skip if edges share an endpoint.
-            if (e1.start_id in [e2.start_id, e2.end_id] or
-                    e1.end_id in [e2.start_id, e2.end_id]):
+        for j in range(i+1, len(edges)):
+            e1, e2 = edges[i], edges[j]
+            if {e1.start_id, e1.end_id} & {e2.start_id, e2.end_id}:
                 continue
-            a = next(node.position for node in nodes if node.id == e1.start_id)
-            b = next(node.position for node in nodes if node.id == e1.end_id)
-            c = next(node.position for node in nodes if node.id == e2.start_id)
-            d = next(node.position for node in nodes if node.id == e2.end_id)
-            inter = segment_intersection(a, b, c, d)
-            if inter is not None:
+
+            a = next(n.position for n in nodes if n.id == e1.start_id)
+            b = next(n.position for n in nodes if n.id == e1.end_id)
+            c = next(n.position for n in nodes if n.id == e2.start_id)
+            d = next(n.position for n in nodes if n.id == e2.end_id)
+
+            if point := segment_intersection(a, b, c, d):
                 junctions.append({
-                    'point': inter,
-                    'edges': (e1.start_id, e1.end_id, e2.start_id, e2.end_id)
+                    'point': point,
+                    'edges': (e1.start_id, e1.end_id, e2.start_id, e2.end_id),
+                    'type': 'crossing' if random.random() < 0.7 else 'junction'
                 })
 
     return edges, junctions
 
 def connect_clusters(nodes: List[Node], edges: List[Edge]) -> List[Edge]:
-    """
-    Ensure full connectivity by checking for disconnected clusters.
-    If multiple connected components exist, find the closest pair of nodes between
-    different components and add an edge connecting them. Repeat until only one component remains.
-    Returns a list of extra edges that were added.
-    """
-    extra_edges: List[Edge] = []
-
-    # Build a graph from current edges using node IDs.
+    """Ensure connectivity with organic bridging."""
     G = nx.Graph()
-    for node in nodes:
-        G.add_node(node.id, pos=node.position)
-    for edge in edges:
-        G.add_edge(edge.start_id, edge.end_id)
+    G.add_nodes_from(n.id for n in nodes)
+    G.add_edges_from((e.start_id, e.end_id) for e in edges)
 
+    extra_edges = []
     components = list(nx.connected_components(G))
+
     while len(components) > 1:
+        # Find closest pair between components
+        closest = None
         min_dist = float('inf')
-        best_pair = (None, None)
-        # Consider every pair of components.
+
         for i in range(len(components)):
-            for j in range(i + 1, len(components)):
-                comp_i = components[i]
-                comp_j = components[j]
-                for id1 in comp_i:
-                    pos1 = next(node.position for node in nodes if node.id == id1)
-                    for id2 in comp_j:
-                        pos2 = next(node.position for node in nodes if node.id == id2)
-                        dist = np.linalg.norm(np.array(pos1) - np.array(pos2))
-                        if dist < min_dist:
+            for j in range(i+1, len(components)):
+                for n1 in components[i]:
+                    pos1 = next(n.position for n in nodes if n.id == n1)
+                    for n2 in components[j]:
+                        pos2 = next(n.position for n in nodes if n.id == n2)
+                        if (dist := math.dist(pos1, pos2)) < min_dist:
                             min_dist = dist
-                            best_pair = (id1, id2)
-        if best_pair[0] is not None and best_pair[1] is not None:
-            new_edge = Edge(start_id=best_pair[0], end_id=best_pair[1])
-            extra_edges.append(new_edge)
-            G.add_edge(best_pair[0], best_pair[1])
+                            closest = (n1, n2)
+
+        if closest:
+            extra_edges.append(Edge(*closest))
+            G.add_edge(*closest)
             components = list(nx.connected_components(G))
-        else:
-            break
+
+    # Add random organic bridges
+    for _ in range(random.randint(1, 3)):
+        n1, n2 = random.sample(nodes, 2)
+        if not G.has_edge(n1.id, n2.id):
+            extra_edges.append(Edge(n1.id, n2.id))
+            G.add_edge(n1.id, n2.id)
+
     return extra_edges
 
 def save_graph_image(nodes: List[Dict], edges: List[Dict], image_filename: str = "dungeon_graph.png"):
-    """
-    Create a graph from nodes and edges, then save it as an image.
-    Assumes each node is a dict with 'id' and 'key' (or 'id' if key missing),
-    and each edge is a dict with 'start_id' and 'end_id'.
-    """
-    # Build a lookup from node id to room label (key)
-    id_to_key = {}
-    for node in nodes:
-        label = node.get('key') or node.get('id', 'Unknown')
-        id_to_key[node.get('id')] = label
-
-    # Create the graph and add nodes using the room labels.
+    """Visualize with force-directed layout."""
     G = nx.Graph()
+    pos = {}
+
     for node in nodes:
-        label = id_to_key.get(node.get('id'))
+        label = node.get('key', node['id'])
         G.add_node(label)
+        pos[label] = node['position']
 
-    # Add edges, mapping start/end IDs to labels.
     for edge in edges:
-        start_label = id_to_key.get(edge.get('start_id'), edge.get('start_id'))
-        end_label = id_to_key.get(edge.get('end_id'), edge.get('end_id'))
-        G.add_edge(start_label, end_label)
+        start = next(n['key'] for n in nodes if n['id'] == edge['start_id'])
+        end = next(n['key'] for n in nodes if n['id'] == edge['end_id'])
+        G.add_edge(start, end)
 
-    # Draw the graph using a spring layout.
-    pos = nx.spring_layout(G, seed=42)  # fixed seed for consistent layout
-    plt.figure(figsize=(8, 6))
-    nx.draw(
-        G,
-        pos,
-        with_labels=True,
-        node_color="lightblue",
-        edge_color="gray",
-        font_weight="bold",
-        node_size=1500,
-    )
-    plt.title("Dungeon Layout")
+    plt.figure(figsize=(12, 16))
+    nx.draw(G, pos, with_labels=True, node_size=400,
+            font_size=8, alpha=0.8, edge_color='gray')
+    plt.title("Organic Dungeon Layout")
     plt.savefig(image_filename)
     plt.close()
 
 def generate_dungeon_map(*args, **kwargs) -> Dict[str, Any]:
-    """
-    Main map generation entry point with detailed logging.
-    Accepts extra keyword arguments (like 'num_dice') and ignores them.
-    """
-    logger.info("🗺️ Starting dungeon map generation...")
+    """Main generation process with enhanced logging."""
+    logger.info("🗺️ Starting organic dungeon generation...")
     try:
         seed = random.randint(0, 100000)
         random.seed(seed)
-        logger.info(f"🎲 Using fixed set of dice with seed {seed}")
 
-        # Node generation using the fixed set.
-        logger.info("🎯 Generating fixed set of nodes...")
         nodes = simulate_dice_drops()
-        logger.info(f"📍 Created {len(nodes)} nodes (fixed set)")
-
-        # Node processing.
-        logger.info("🔄 Processing node clusters...")
         nodes = _process_nodes(nodes)
-        logger.info(f"🏘️ Final node count after processing: {len(nodes)}")
 
-        # Edge creation: form loops and connect free nodes.
-        logger.info("🔗 Creating loops and connecting free nodes...")
         edges, junctions = create_loops_and_connect(nodes)
-        logger.info(f"🛣️ Created {len(edges)} connections with {len(junctions)} junctions")
-
-        # Ensure full connectivity by bridging disconnected clusters.
         extra_edges = connect_clusters(nodes, edges)
-        if extra_edges:
-            edges.extend(extra_edges)
-            logger.info(f"🔗 Added {len(extra_edges)} extra edge(s) to connect clusters.")
+        edges.extend(extra_edges)
 
-        logger.info("✅ Map generation completed successfully")
+        logger.info(f"🌐 Generated {len(nodes)} rooms with {len(edges)} connections")
+        logger.info(f"🔄 Found {len(junctions)} organic intersections")
+
         return {
-            "content": "Dungeon Map Details",
+            "content": "Organic Dungeon Map",
             "metadata": {
                 "nodes": [asdict(n) for n in nodes],
                 "edges": [asdict(e) for e in edges],
@@ -324,10 +303,11 @@ def generate_dungeon_map(*args, **kwargs) -> Dict[str, Any]:
                 "stats": {
                     "total_rooms": len(nodes),
                     "connections": len(edges),
-                    "entrances": sum(1 for n in nodes if n.is_entrance)
+                    "entrances": sum(1 for n in nodes if n.is_entrance),
+                    "crossings": sum(1 for j in junctions if j['type'] == 'crossing')
                 }
             }
         }
     except Exception as e:
-        logger.error(f"❌ Map generation failed: {str(e)}")
+        logger.error(f"Generation failed: {str(e)}")
         return {"error": str(e)}
