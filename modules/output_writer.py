@@ -5,6 +5,8 @@ import logging
 from typing import Any, Dict, List, Optional
 import html
 
+from modules.dungeon_map_generator import save_graph_image
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -199,9 +201,31 @@ class MarkdownWriter:
         return content
 
 
-def write_markdown(filename: str, data: Dict, sanitize: bool = True) -> None:
-    """Public interface for markdown writing."""
-    writer = MarkdownWriter(sanitize=sanitize)
-    writer.write(filename, data)
+
+def write_markdown(filename: str, data: dict, sanitize: bool = True):
+    """Modified to properly pass loop data"""
+    # Add error check at start
+    if 'error' in data:
+        logging.error("Cannot generate output - errors present in data")
+        return
+
+    try:
+        # Get loop data from metadata
+        loops = data.get('metadata', {}).get('loops', [])
+
+        # Pass all required parameters
+        save_graph_image(
+            nodes=data['metadata']['nodes'],
+            edges=data['metadata']['edges'],
+            loops=loops,  # This was missing
+            image_filename="dungeon_graph.png"
+        )
+
+        # Rest of your markdown writing code...
+
+    except KeyError as e:
+        logging.error(f"Missing data for output generation: {str(e)}")
+    except Exception as e:
+        logging.error(f"Output generation failed: {str(e)}")
 
 

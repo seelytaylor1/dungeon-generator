@@ -1,3 +1,4 @@
+# main.py
 import logging
 import json
 import importlib
@@ -44,8 +45,9 @@ async def process_module(module_info, output_data, config):
 
     # Check dependencies
     dependencies = module_info.get('depends_on', [])
-    if not all(dep in output_data for dep in dependencies):
-        logging.warning(f"⏭️ Skipping {module_name} - Missing dependencies: {dependencies}")
+    missing_deps = [dep for dep in dependencies if dep not in output_data]
+    if missing_deps:
+        logging.warning(f"⏭️ Skipping {module_name} - Missing dependencies: {missing_deps}")
         return
 
     # Parameter resolution system
@@ -56,14 +58,8 @@ async def process_module(module_info, output_data, config):
             f["content"] for f in output_data.get('faction', {}).get('factions', [])
         ),
         'exterior_content': lambda: output_data.get('exterior', {}).get('content', ''),
-        'num_dice': lambda: (
-            logging.debug(f"🎲 Map using {module_info.get('num_dice', 11)} dice"),
-            module_info.get('num_dice', 11)
-        )[1],
-        'dice_rolls': lambda: [
-            random.randint(1, 6)
-            for _ in range(module_info.get('num_dice', 11))
-        ],
+        'num_dice': lambda: module_info.get('num_dice', 11),
+        'dice_rolls': lambda: [random.randint(1, 6) for _ in range(module_info.get('num_dice', 11))],
         'existing_data': lambda: output_data
     }
 
@@ -76,14 +72,13 @@ async def process_module(module_info, output_data, config):
 
     for attempt in range(1, max_retries + 1):
         try:
-            # Build parameters
             params = {}
             for param in module_info.get('required_params', []):
                 if param in param_resolvers:
                     params[param] = param_resolvers[param]()
                 else:
                     logging.warning(f"⚠️ Unknown parameter: {param}")
-                    params[param] = ""
+                    params[param] = None
 
             logging.info(f"🚀 Processing {module_name} (attempt {attempt}/{max_retries})")
 
@@ -93,8 +88,8 @@ async def process_module(module_info, output_data, config):
             else:
                 result = module_function(**params)
 
-            if not result:
-                raise ValueError("Empty response from module")
+            if not result or 'error' in result:
+                raise ValueError(f"Module failed: {result.get('error', 'Unknown error')}")
 
             output_data[module_name] = result
             logging.info(f"✅ {module_name.title()} succeeded")
@@ -103,9 +98,15 @@ async def process_module(module_info, output_data, config):
         except Exception as e:
             if attempt == max_retries:
                 logging.error(f"❌ {module_name} failed after {max_retries} attempts: {str(e)}")
+                output_data['error'] = str(e)
             else:
                 logging.warning(f"🔄 Retrying {module_name} ({attempt}/{max_retries})")
                 await asyncio.sleep(1 * attempt)
+
+
+def is_affirmative(response):
+    return response.strip().lower() in ['yes', 'y']
+
 
 async def main():
     config = build_config()
@@ -118,45 +119,46 @@ async def main():
 
     output_data = {}
 
-    # User input section with explicit history handling
-    generate_history = input("📜 Generate history automatically? (yes/no): ").strip().lower() == "yes"
-    generate_faction = input("🤼 Generate factions automatically? (yes/no): ").strip().lower() == "yes"
-    generate_exterior = input("🌅 Generate exterior automatically? (yes/no): ").strip().lower() == "yes"
+    # User input handling
+    generate_history = is_affirmative(input("📜 Generate history automatically? (yes/no): "))
+    generate_faction = is_affirmative(input("🤼 Generate factions automatically? (yes/no): "))
+    generate_exterior = is_affirmative(input("🌅 Generate exterior automatically? (yes/no): "))
 
-    # Handle manual history input
+
+    # Manual input collection
     if not generate_history:
         output_data['history'] = {
-            'content': input("Enter dungeon history (press Enter when done):\n"),
-            'metadata': {'source': 'manual_input'}
+            'content': input("Enter dungeon history:\n"),
+            'metadata': {'source': 'manual'}
         }
-
-    # Handle other manual inputs
     if not generate_faction:
         output_data['faction'] = {
-            'factions': [{'content': input("Enter faction details: ")}],
-            'metadata': {'source': 'manual_input'}
+            'factions': [{'content': input("Enter faction details:\n")}],
+            'metadata': {'source': 'manual'}
         }
-
     if not generate_exterior:
         output_data['exterior'] = {
-            'content': input("Enter exterior description: "),
-            'metadata': {'source': 'manual_input'}
+            'content': input("Enter exterior description:\n"),
+            'metadata': {'source': 'manual'}
         }
 
-    # Model initialization with fallback
+    # Model initialization
     models = config['models']
     installed_models = get_installed_models()
 
     if models['default'] not in installed_models:
-        fallback = models.get('fallback')
-        if fallback and fallback in installed_models:
-            logging.warning(f"⚠️ Using fallback model: {fallback}")
-            models['default'] = fallback
+        if fallback := models.get('fallback'):
+            if fallback in installed_models:
+                logging.warning(f"⚠️ Using fallback model: {fallback}")
+                models['default'] = fallback
+            else:
+                logging.error("❌ No valid models available")
+                return
         else:
-            logging.error("❌ No valid models available")
+            logging.error("❌ Default model not available")
             return
 
-    # Filter out modules based on user choices
+    # Module filtering
     filtered_modules = [
         mod for mod in config['modules']
         if not (
@@ -166,33 +168,34 @@ async def main():
         )
     ]
 
-    # Process modules strategically
+    # Process modules
     independent = []
     dependent = []
-
     for module in sorted(filtered_modules, key=lambda x: x['priority']):
-        if not module.get('depends_on'):
-            independent.append(module)
-        else:
+        if module.get('depends_on'):
             dependent.append(module)
+        else:
+            independent.append(module)
 
-    # Process independent modules in parallel
+    # Parallel processing
     await asyncio.gather(*[
         process_module(mod, output_data, config)
         for mod in independent
     ])
 
-    # Process dependent modules sequentially
+    # Sequential processing
     for mod in dependent:
         await process_module(mod, output_data, config)
 
-    # Generate output with sanitization
-    sanitize = config['output'].get('sanitize', True)
-    write_markdown(
-        filename=config['output']['file'],
-        data=output_data,
-        sanitize=sanitize
-    )
+    # Output generation
+    if 'error' not in output_data:
+        write_markdown(
+            filename=config['output']['file'],
+            data=output_data,
+            sanitize=config['output'].get('sanitize', True)
+        )
+    else:
+        logging.error("⛔ Aborting output generation due to errors")
 
 def build_config():
     try:
