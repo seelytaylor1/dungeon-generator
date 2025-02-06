@@ -7,7 +7,6 @@ from ollama_manager import generate_with_retry  # Changed import
 
 logger = logging.getLogger(__name__)
 
-
 def generate_history(model: str) -> Dict[str, Any]:  # Removed interactive params
     """Generate dungeon history using configured model"""
     try:
@@ -30,7 +29,6 @@ def generate_history(model: str) -> Dict[str, Any]:  # Removed interactive param
         logger.error(f"History generation failed: {str(e)}")
         return {"error": str(e)}
 
-
 def _select_history_components() -> Dict[str, str]:
     """Select random elements from history tables"""
     return {
@@ -41,14 +39,12 @@ def _select_history_components() -> Dict[str, str]:
         "Present Purpose": random.choice(tables.DUNGEON_TABLES["present"])
     }
 
-
 def _select_faction_details() -> Dict[str, str]:
     """Select faction characteristics"""
     return {
         "Creature Type": random.choice(tables.FACTION_TABLES["creature_type"]),
         "Impulse": random.choice(tables.FACTION_TABLES["impulse"])
     }
-
 
 def _generate_history_content(model: str, builder_info: Dict, history_components: Dict) -> Dict:
     """Generate content using the new ollama manager"""
@@ -68,7 +64,6 @@ def _generate_history_content(model: str, builder_info: Dict, history_components
 
     return content
 
-
 def _create_builder_agent(builder_info: Dict) -> Dict:
     return {
         "key": "Builders",
@@ -77,7 +72,6 @@ def _create_builder_agent(builder_info: Dict) -> Dict:
 - Impulse: {builder_info['Impulse']}
 Provide concise background in one paragraph."""
     }
-
 
 def _create_history_agent(components: Dict) -> Dict:
     return {
@@ -88,7 +82,6 @@ def _create_history_agent(components: Dict) -> Dict:
 One paragraph with key events."""
     }
 
-
 def _create_ruin_agent(components: Dict) -> Dict:
     return {
         "key": "Ruin",
@@ -97,7 +90,6 @@ def _create_ruin_agent(components: Dict) -> Dict:
 One paragraph with key details."""
     }
 
-
 def _create_present_agent(components: Dict) -> Dict:
     return {
         "key": "Present State",
@@ -105,7 +97,6 @@ def _create_present_agent(components: Dict) -> Dict:
 - Purpose: {components['Present Purpose']}
 One paragraph with current occupants."""
     }
-
 
 def _build_metadata(builder_info: Dict, components: Dict) -> Dict:
     """Build standardized metadata format"""

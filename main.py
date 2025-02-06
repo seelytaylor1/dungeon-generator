@@ -1,72 +1,179 @@
+# main.py
 import logging
 import json
 import importlib
-from ollama_manager import initialize_service, check_model_installed
-from modules.shared.output_writer import write_markdown
+import asyncio
+import re
+import random
+from schema import Schema, And, Or, Optional, SchemaError
+from ollama_manager import initialize_service, check_model_installed, get_installed_models
+from modules.output_writer import write_markdown
 
-# Include emojis in the format and set logging level to INFO
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[logging.StreamHandler()])
 
-def main():
+# Enhanced configuration schema
+config_schema = Schema({
+    'models': {
+        'default': And(str, len),
+        Optional('fallback'): Or(str, None)
+    },
+    'modules': [{
+        'name': And(str, len),
+        'function': And(str, len),
+        'priority': int,
+        Optional('model'): Or(str, None),
+        Optional('num_dice'): int,
+        Optional('required_params'): [str],
+        Optional('depends_on'): [str],
+        Optional('retries'): And(int, lambda n: n >= 0),
+        Optional('timeout'): And(int, lambda n: n > 0)
+    }],
+    'output': {
+        'file': And(str, len),
+        Optional('sanitize'): bool
+    }
+})
+
+
+async def process_module(module_info, output_data, config):
+    module_name = module_info['name']
+    function_name = module_info['function']
+    default_model = config['models']['default']
+    max_retries = module_info.get('retries', 1)
+    timeout = module_info.get('timeout', 30)
+
+    # Check dependencies
+    dependencies = module_info.get('depends_on', [])
+    if not all(dep in output_data for dep in dependencies):
+        logging.warning(f"⏭️ Skipping {module_name} - Missing dependencies: {dependencies}")
+        return
+
+    # Parameter resolution system
+    param_resolvers = {
+        'model': lambda: module_info.get('model', default_model),
+        'history_content': lambda: output_data.get('history', {}).get('content', ''),
+        'faction_content': lambda: "\n\n".join(
+            f["content"] for f in output_data.get('faction', {}).get('factions', [])
+        ),
+        'num_dice': lambda: (
+            logging.debug(f"🎲 Map using {module_info.get('num_dice', 11)} dice"),
+            module_info.get('num_dice', 11)
+        )[1],
+        'dice_rolls': lambda: [
+            random.randint(1, 6)
+            for _ in range(module_info.get('num_dice', 11))
+        ],
+        'existing_data': lambda: output_data
+    }
+
     try:
-        with open("config.json", "r") as config_file:
-            config = json.load(config_file)
+        module = importlib.import_module(f"modules.{module_name}_generator")
+        module_function = getattr(module, function_name)
+    except (ImportError, AttributeError) as e:
+        logging.error(f"❌ Module load error: {e}")
+        return
 
-        if not initialize_service():
-            logging.error("❌ Failed to initialize Ollama")
-            return
+    for attempt in range(1, max_retries + 1):
+        try:
+            # Build parameters
+            params = {}
+            for param in module_info.get('required_params', []):
+                if param in param_resolvers:
+                    params[param] = param_resolvers[param]()
+                else:
+                    logging.warning(f"⚠️ Unknown parameter: {param}")
+                    params[param] = ""
 
-        model_name = config["models"]["default"]
-        if not check_model_installed(model_name):
-            logging.error(f"❌ Model '{model_name}' not installed. Run 'ollama pull {model_name}' first")
-            return
+            logging.info(f"🚀 Processing {module_name} (attempt {attempt}/{max_retries})")
 
-        output_data = {}
-        for module_info in sorted(config["modules"], key=lambda x: x["priority"]):
-            module_name = module_info["name"]
-            module_function_name = module_info["function"]
-            module_model = module_info.get("model", model_name)
-            num_dice = module_info.get("num_dice", 11)  # Default to 11 if not specified
-
-            module = importlib.import_module(f"modules.{module_name}_generator")
-            module_function = getattr(module, module_function_name)
-
-            # Fetch history and faction content if available
-            history_content = output_data.get("History", {}).get("content", "")
-            faction_content = ""
-            if "Faction" in output_data:
-                factions = output_data["Faction"]
-                # Concatenate faction content
-                faction_descriptions = [faction['content'] for faction in factions['factions']]
-                faction_content = "\n\n".join(faction_descriptions)
-
-            logging.info(f"🚀 Starting generation for module: {module_name.capitalize()}")
-
-            # Pass required parameters to the module function
-            if module_name == "exterior":
-                result = module_function(module_model, history_content, faction_content)
-            elif module_name == "dungeon_map":
-                # Pass num_dice to the dungeon_map function
-                result = module_function(num_dice)
+            # Execute with timeout
+            if asyncio.iscoroutinefunction(module_function):
+                result = await asyncio.wait_for(module_function(**params), timeout)
             else:
-                result = module_function(module_model, history_content)
+                result = module_function(**params)
 
-            if result is None:
-                logging.error(f"❌ {module_name.capitalize()} generation failed: No result returned.")
-                continue
+            if not result:
+                raise ValueError("Empty response from module")
 
-            if 'error' in result:
-                logging.error(f"❌ {module_name.capitalize()} generation failed: {result['error']}")
-                continue
+            output_data[module_name] = result
+            logging.info(f"✅ {module_name.title()} succeeded")
+            return
 
-            output_data[module_name.replace("_", " ").title()] = result  # Ensure consistency
-            logging.info(f"✅ {module_name.capitalize()} generated successfully!")
+        except Exception as e:
+            if attempt == max_retries:
+                logging.error(f"❌ {module_name} failed after {max_retries} attempts: {str(e)}")
+            else:
+                logging.warning(f"🔄 Retrying {module_name} ({attempt}/{max_retries})")
+                await asyncio.sleep(1 * attempt)
 
-        write_markdown(config["output"]["file"], output_data)
-        logging.info(f"📝 Documentation generated: {config['output']['file']}")
 
-    except Exception as e:
-        logging.exception("💥 An unexpected error occurred:")
+async def main():
+    config = build_config()
+    if not config:
+        return
+
+    # Ensure the Ollama service is running before proceeding.
+    from ollama_manager import initialize_service  # Ensure we have the function imported.
+    if not initialize_service():
+        logging.error("❌ Failed to initialize Ollama service. Exiting.")
+        return
+
+    output_data = {}
+
+    # Model initialization with fallback
+    models = config['models']
+    installed_models = get_installed_models()
+
+    if models['default'] not in installed_models:
+        fallback = models.get('fallback')
+        if fallback and fallback in installed_models:
+            logging.warning(f"⚠️ Using fallback model: {fallback}")
+            models['default'] = fallback
+        else:
+            logging.error("❌ No valid models available")
+            return
+
+    # Process modules strategically
+    independent = []
+    dependent = []
+
+    for module in sorted(config['modules'], key=lambda x: x['priority']):
+        if not module.get('depends_on'):
+            independent.append(module)
+        else:
+            dependent.append(module)
+
+    # Process independent modules in parallel
+    await asyncio.gather(*[
+        process_module(mod, output_data, config)
+        for mod in independent
+    ])
+
+    # Process dependent modules sequentially
+    for mod in dependent:
+        await process_module(mod, output_data, config)
+
+    # Generate output with sanitization
+    sanitize = config['output'].get('sanitize', True)
+    write_markdown(
+        filename=config['output']['file'],
+        data=output_data,
+        sanitize=sanitize
+    )
+
+
+def build_config():
+    try:
+        with open("config.json") as f:
+            config = json.load(f)
+        return config_schema.validate(config)
+    except (FileNotFoundError, json.JSONDecodeError, SchemaError) as e:
+        logging.error(f"❌ Config error: {str(e)}")
+        return None
+
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

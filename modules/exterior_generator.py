@@ -1,191 +1,135 @@
-# modules/exterior_generator.py
-
-import time
-import requests
 import random
-from .shared import tables
-from .shared.output_writer import sanitize_output, register_handler
 import logging
+from typing import Dict, Any, Optional
+from modules import tables
+from modules.output_writer import OutputSanitizer
+from ollama_manager import generate_with_retry  # Updated import
 
+logger = logging.getLogger(__name__)
 
-def generate_exterior(model, history_content=None, faction_content=None):
+def generate_exterior(model: str, history_content: str, faction_content: str) -> Dict[str, Any]:
+    """Generate dungeon exterior description with integrated validation"""
     try:
-        logging.info("🌲 Starting dungeon exterior generation...")
+        logger.info("Starting exterior generation")
 
-        # Generate random environment
-        logging.info("🌍 Rolling for environment...")
-        environment = random.choice(tables.EXTERIOR_TABLES["environment"])
-        logging.info(f"🌍 Environment selected: {environment}")
+        # Validate required tables
+        _validate_exterior_tables()
 
-        # Handle special cases for environment
-        if environment == "Re-roll twice and combine":
-            logging.info("🎲 Re-rolling environment twice and combining...")
-            env1 = random.choice(tables.EXTERIOR_TABLES["environment"])
-            env2 = random.choice(tables.EXTERIOR_TABLES["environment"])
-            while env1 == "Re-roll twice and combine":
-                env1 = random.choice(tables.EXTERIOR_TABLES["environment"])
-            while env2 == "Re-roll twice and combine" or env2 == env1:
-                env2 = random.choice(tables.EXTERIOR_TABLES["environment"])
-            environment = f"{env1} and {env2}"
-            logging.info(f"🌍 Combined environment: {environment}")
-
-        # Generate random path to the dungeon
-        logging.info("🛤️ Rolling for path to the dungeon...")
-        path = random.choice(tables.EXTERIOR_TABLES["path"])
-        logging.info(f"🛤️ Path selected: {path}")
-
-        # Handle sub-options for path
-        if path == "River":
-            logging.info("🌊 Path is a river. Selecting river details...")
-            path_detail = random.choice(tables.EXTERIOR_TABLES["river_details"])
-            path = f"{path} ({path_detail})"
-            logging.info(f"🌊 Path updated with details: {path}")
-
-        # Generate random landmark
-        logging.info("🗿 Rolling for landmark on the way...")
-        landmark = random.choice(tables.EXTERIOR_TABLES["landmark"])
-        logging.info(f"🗿 Landmark selected: {landmark}")
-
-        # Generate random secondary entrance
-        logging.info("🚪 Rolling for secondary entrance...")
-        secondary_entrance_location = random.choice(tables.EXTERIOR_TABLES["secondary_entrance_location"])
-        secondary_entrance_destination = random.choice(tables.EXTERIOR_TABLES["secondary_entrance_destination"])
-        secondary_entrance = f"{secondary_entrance_location} leading to {secondary_entrance_destination}"
-        logging.info(f"🚪 Secondary entrance: {secondary_entrance}")
-
-        # Generate random dungeon antechamber
-        logging.info("🏰 Rolling for dungeon antechamber...")
-        antechamber = random.choice(tables.EXTERIOR_TABLES["antechamber"])
-        logging.info(f"🏰 Antechamber selected: {antechamber}")
-
-        # Initialize descriptions dictionary
-        descriptions = {}
-
-        # Function to generate description for each component with unique prompts
-        def generate_component_description(component_name, component_value):
-            logging.info(f"✏️ Generating description for {component_name}...")
-            start_time = time.time()
-
-            # Optionally summarize content if too long
-            max_content_length = 1000  # Adjust as needed
-            hc = history_content if len(history_content) <= max_content_length else history_content[:max_content_length] + "..."
-
-            # Define unique prompts for each component
-            prompts = {
-                'Environment': f"""You are an expert fantasy game writer. Write a succinct one paragraph 
-                description of the environment surrounding the dungeon in a dark fantasy sword and sorcery 
-                tabletop RPG. Be specific and focus on concrete details. Write like Robert E. Howard.
-                Use the following details:
-
-- Environment: {component_value}
-- Dungeon History: {hc}
-
-Emphasize the atmosphere and how it sets the mood for the adventure.""",
-
-                'Path': f"""You are an expert fantasy game writer.  Write a succinct one paragraph 
-                description of the path to the dungeon in a dark fantasy sword and sorcery tabletop RPG. 
-                Write like Robert E. Howard. Use the following details:
-
-- Path: {component_value}
-- Dungeon History: {hc}
-
-Detail any challenges or notable features adventurers might encounter along the way.""",
-
-                'Landmark': f"""You are an expert fantasy game writer. Write a succinct one paragraph 
-                description of a significant landmark on the way to the dungeon in a dark fantasy sword and sorcery 
-                tabletop RPG. Be specific and focus on concrete details. Use the following details for inspiration:
-
-- Landmark: {component_value}
-- Dungeon History: {hc}
-
-Explain how the landmark relates to the dungeon and its history.""",
-
-                'Secondary Entrance': f"""You are an expert fantasy game writer.  Write a succinct one paragraph 
-                description about a secondary entrance to the dungeon in a dark fantasy sword and sorcery tabletop 
-                RPG. Be specific and focus on concrete details. Write like Robert E. Howard. Use the following details 
-                for inspiration:
-
-- Secondary Entrance: {component_value}
-- Dungeon History: {hc}
-
-Describe the entrance and any secrets or challenges associated with it.""",
-
-                'Antechamber': f"""You are an expert fantasy game writer.  Write a succinct one paragraph 
-                description the dungeon's antechamber in a dark fantasy sword and sorcery tabletop RPG. 
-                Be specific and focus on concrete details. Write like Robert E. Howard. Use the following details 
-                for inspiration:
-
-- Antechamber: {component_value}
-- Dungeon History: {hc}
-
-Set the scene for what adventurers will encounter as they enter the dungeon.""",
-            }
-
-            prompt = prompts.get(component_name, f"Provide a description for {component_name}: {component_value}")
-
-            response = requests.post(
-                "http://localhost:11434/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.85,
-                        "top_p": 0.9,
-                        "max_tokens": 300
-                    }
-                },
-                timeout=180
-            )
-            response.raise_for_status()
-            elapsed_time = time.time() - start_time
-            logging.info(f"✅ Description for {component_name} generated in {elapsed_time:.2f} seconds.")
-            return sanitize_output(response.json()["response"])
-
-        # Generate descriptions for each component
-        components = [
-            ('Environment', environment),
-            ('Path', path),
-            ('Landmark', landmark),
-            ('Secondary Entrance', secondary_entrance),
-            ('Antechamber', antechamber),
-        ]
-
-        for component_name, component_value in components:
-            descriptions[component_name] = generate_component_description(component_name, component_value)
-            time.sleep(2)  # Sleep for 2 seconds between requests
-            logging.info("⏳ Waiting for 2 seconds before the next component generation...")
-
-        logging.info("🎉 Dungeon exterior generation complete!")
+        components = _create_components(history_content, faction_content)
+        descriptions = _generate_component_descriptions(model, components, history_content)
 
         return {
-            "descriptions": descriptions,
+            "content": "\n\n".join(descriptions.values()),
             "metadata": {
-                "Environment": environment,
-                "Path to Dungeon": path,
-                "Landmark": landmark,
-                "Secondary Entrance": secondary_entrance,
-                "Antechamber": antechamber
+                "components": {k: v[1] for k, v in components.items()},
+                "sources": {
+                    "history": history_content[:200] + "..." if len(history_content) > 200 else history_content,
+                    "factions": faction_content[:200] + "..." if len(faction_content) > 200 else faction_content
+                }
             }
         }
 
     except Exception as e:
-        logging.exception("❌ Exterior generation failed")
+        logger.error(f"Exterior generation failed: {str(e)}")
         return {"error": str(e)}
 
+def _validate_exterior_tables() -> None:
+    """Ensure required tables exist and are populated"""
+    required_tables = {
+        "environment": 3,  # Minimum 3 options
+        "path": 2,
+        "landmark": 2,
+        "secondary_entrance_location": 2,
+        "secondary_entrance_destination": 2,
+        "antechamber": 2
+    }
 
-# Register the handler for the Exterior section
-def exterior_handler(data, f):
-    f.write("## Dungeon Exterior\n\n")
-    descriptions = data.get('descriptions', {})
-    for component_name, description in descriptions.items():
-        f.write(f"### {component_name}\n\n")
-        f.write(f"{description}\n\n")
-    if 'metadata' in data:
-        f.write("### Key Aspects\n")
-        for k, v in data['metadata'].items():
-            f.write(f"- **{k}**: {v}\n")
-        f.write("\n")
+    for table, min_entries in required_tables.items():
+        if table not in tables.EXTERIOR_TABLES:
+            raise ValueError(f"Missing EXTERIOR_TABLES entry: {table}")
+        if len(tables.EXTERIOR_TABLES[table]) < min_entries:
+            raise ValueError(f"EXTERIOR_TABLES[{table}] needs at least {min_entries} entries")
 
+def _create_components(history: str, factions: str) -> Dict[str, tuple]:
+    """Create exterior components with smart selection logic"""
+    components = {}
 
-register_handler("Exterior", exterior_handler)
+    # Environment
+    env = random.choice(tables.EXTERIOR_TABLES["environment"])
+    if env == "Re-roll twice and combine":
+        env1 = random.choice([e for e in tables.EXTERIOR_TABLES["environment"] if e != env])
+        env2 = random.choice([e for e in tables.EXTERIOR_TABLES["environment"] if e not in [env, env1]])
+        env = f"{env1}/{env2}"
+    components["environment"] = ("Environment", env)
+
+    # Path
+    path = random.choice(tables.EXTERIOR_TABLES["path"])
+    if path == "River":
+        detail = random.choice(tables.EXTERIOR_TABLES["river_details"])
+        path = f"{path} ({detail})"
+    components["path"] = ("Path", path)
+
+    # Landmark
+    components["landmark"] = ("Landmark", random.choice(tables.EXTERIOR_TABLES["landmark"]))
+
+    # Secondary Entrance
+    loc = random.choice(tables.EXTERIOR_TABLES["secondary_entrance_location"])
+    dest = random.choice(tables.EXTERIOR_TABLES["secondary_entrance_destination"])
+    components["secondary_entrance"] = ("Secondary Entrance", f"{loc} leading to {dest}")
+
+    # Antechamber
+    components["antechamber"] = ("Antechamber", random.choice(tables.EXTERIOR_TABLES["antechamber"]))
+
+    return components
+
+def _generate_component_descriptions(model: str, components: Dict, history: str) -> Dict[str, str]:
+    """Generate descriptions using Ollama service"""
+    descriptions = {}
+
+    for key, (name, value) in components.items():
+        try:
+            prompt = _build_component_prompt(name, value, history)
+            response = generate_with_retry(
+                prompt=prompt,
+                model=model,
+                temperature=0.85,
+                top_p=0.9
+            )
+
+            if not response or not response.get("response"):
+                raise ValueError(f"Empty response for {name}")
+
+            descriptions[name] = OutputSanitizer.sanitize(response["response"])
+            logger.info(f"Generated {name} description")
+
+        except Exception as e:
+            logger.warning(f"Failed to generate {name}: {str(e)}")
+            descriptions[name] = f"{name} description unavailable"
+
+    return descriptions
+
+def _build_component_prompt(component_name: str, component_value: str, history: str) -> str:
+    """Construct context-aware prompts"""
+    prompts = {
+        "Environment": f"""Describe a {component_value} environment surrounding a dark fantasy dungeon. Include:
+
+Context: {history}""",
+
+        "Path": f"""Detail a {component_value} leading to a dungeon. Include:
+
+Context: {history}""",
+
+        "Landmark": f"""Describe a {component_value} near the dungeon. Include:
+
+History: {history}""",
+
+        "Secondary Entrance": f"""Describe a secret entrance: {component_value}. Include:
+
+Historical context: {history}""",
+
+        "Antechamber": f"""Describe an antechamber: {component_value}. Include:
+
+Dungeon history: {history}"""
+    }
+
+    return prompts.get(component_name, f"Describe the {component_name}: {component_value}")

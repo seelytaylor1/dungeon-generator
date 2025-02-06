@@ -1210,8 +1210,8 @@ FACTION_TABLES = {
         "One powerful creature",
         "A small tight-knit group",
         "An unorganized gang",
-        "A collective",
-        "A vast group"
+        "A large group",
+        "A vast collective"
         ],
     "creature_type": [
         "Beastial",
@@ -1220,10 +1220,11 @@ FACTION_TABLES = {
         "Goblinoid",
         "Humanoid",
         "Reptilian",
+        "Viperian",
         "Undead",
-        "Spectral",
-        "Crystalline",
-        "Stonehewn",
+        "Ghosts",
+        "Crystalline Beings",
+        "Stonehewn Beings",
         "Plant",
         "Ooze",
         "Demonic",
@@ -1244,7 +1245,16 @@ FACTION_TABLES = {
         "Orcish",
         "Goblin",
         "Gnomish",
-        "Human"
+        "Human",
+        "Old Ones",
+        "Orderlings",
+        "Chaos Servants",
+        "Fairies",
+        "Kytherians",
+        "Parasites",
+        "Thanians",
+        "Aliens",
+        "Time Travellers"
     ]
 }
 EXTERIOR_TABLES = {

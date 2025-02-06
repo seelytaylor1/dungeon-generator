@@ -1,78 +1,92 @@
-# faction_generator.py
-import requests
 import random
-from .shared import tables
-from .shared.output_writer import sanitize_output, register_handler
 import logging
+from typing import Dict, Any, List, Optional
+from modules import tables
+from modules.output_writer import OutputSanitizer
+from ollama_manager import generate_with_retry  # Updated import
 
-def generate_factions(model, history_content):
-    num_factions = random.randint(1, 3)
-    factions = []
+logger = logging.getLogger(__name__)
 
-    for _ in range(num_factions):
-        faction_goal = random.choice(tables.FACTION_TABLES["goal"])
-        faction_obstacle = random.choice(tables.FACTION_TABLES["obstacle"])
-        faction_impulse = random.choice(tables.FACTION_TABLES["impulse"])
-        faction_size = random.choice(tables.FACTION_TABLES["size"])
-        faction_creature_type = random.choice(tables.FACTION_TABLES["creature_type"])
+def generate_factions(model: str, history_content: str) -> Dict[str, Any]:
+    """Generate dungeon factions using configured model"""
+    try:
+        num_factions = random.randint(1, 3)
+        logger.info(f"Generating {num_factions} faction(s)")
 
-        faction_prompt = f"""You are an expert fantasy game writer. Write a short paragraph about a faction 
-in a dark fantasy sword and sorcery tabletop RPG dungeon. The faction's history has been influenced by the following 
-details:
+        factions = []
+        for i in range(num_factions):
+            faction = _generate_single_faction(model, history_content, i+1)
+            if faction:
+                factions.append(faction)
 
-- Faction Goal: {faction_goal}
-- Faction Obstacle: {faction_obstacle}
-- Faction Impulse: {faction_impulse}
-- Faction Size: {faction_size}
-- Faction Creature Type: {faction_creature_type}
-- Dungeon History: {history_content}
+        return {
+            "num_factions": len(factions),
+            "factions": factions
+        }
 
-Name the faction and describe the faction's goals, obstacles, behavior, size, and creature type. 
-Include a brief introduction to their leader(s)."""
+    except Exception as e:
+        logger.error(f"Faction generation failed: {str(e)}")
+        return {"error": str(e)}
 
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": faction_prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.8,
-                    "top_p": 0.9,
-                    "max_tokens": 300
-                }
-            },
-            timeout=60
+def _generate_single_faction(model: str, history: str, index: int) -> Optional[Dict]:
+    """Generate a single faction with retry logic"""
+    try:
+        details = _assemble_faction_details()
+        prompt = _create_faction_prompt(details, history)
+
+        logger.info(f"Generating faction {index} using model {model}")
+        response = generate_with_retry(
+            prompt=prompt,
+            model=model,
+            temperature=0.8,
+            top_p=0.9
         )
-        response.raise_for_status()
 
-        faction_content = sanitize_output(response.json()["response"])
-        factions.append({
-            "goal": faction_goal,
-            "obstacle": faction_obstacle,
-            "impulse": faction_impulse,
-            "size": faction_size,
-            "creature_type": faction_creature_type,
-            "content": faction_content
-        })
+        if not response:
+            raise ValueError("Empty response from generation API")
+
+        return {
+            **details,
+            "content": OutputSanitizer.sanitize(response.get("response", ""))
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to generate faction {index}: {str(e)}")
+        return None
+
+def _assemble_faction_details() -> Dict[str, str]:
+    """Assemble faction components from tables with validation"""
+    required_tables = ["goal", "obstacle", "impulse", "size", "creature_type"]
+    for table in required_tables:
+        if not tables.FACTION_TABLES.get(table):
+            raise ValueError(f"Missing required FACTION_TABLES entry: {table}")
 
     return {
-        "num_factions": num_factions,
-        "factions": factions
+        "goal": random.choice(tables.FACTION_TABLES["goal"]),
+        "obstacle": random.choice(tables.FACTION_TABLES["obstacle"]),
+        "impulse": random.choice(tables.FACTION_TABLES["impulse"]),
+        "size": random.choice(tables.FACTION_TABLES["size"]),
+        "creature_type": random.choice(tables.FACTION_TABLES["creature_type"])
     }
 
-# Register the handler for the Factions section
-def factions_handler(data, f):
-    f.write("## Factions\n\n")
-    f.write(f"Number of Factions: {data['num_factions']}\n\n")
-    for faction in data['factions']:
-        f.write(f"### Faction\n\n")
-        f.write(f"- **Goal**: {faction['goal']}\n")
-        f.write(f"- **Obstacle**: {faction['obstacle']}\n")
-        f.write(f"- **Impulse**: {faction['impulse']}\n")
-        f.write(f"- **Size**: {faction['size']}\n")
-        f.write(f"- **Creature Type**: {faction['creature_type']}\n\n")
-        f.write(f"{faction['content']}\n\n")
+def _create_faction_prompt(details: Dict[str, str], history: str) -> str:
+    """Create structured generation prompt"""
+    return f"""Create a dark fantasy faction description with these elements:
+    
+1. Faction Name (Original and thematic)
+2. Core Goal: {details['goal']}
+3. Primary Obstacle: {details['obstacle']}
+4. Driving Impulse: {details['impulse']}
+5. Organization Size: {details['size']}
+6. Creature Type: {details['creature_type']}
 
+Historical Context:
+{history}
 
-register_handler("Faction", factions_handler)
+Include:
+- Leadership structure
+- Key locations they control
+- Relationship to other factions
+- Signature abilities/resources
+- 2-3 sentence description of their current activities"""
+
