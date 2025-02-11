@@ -6,14 +6,15 @@ import asyncio
 import random
 from schema import Schema, And, Or, Optional, SchemaError
 from ollama_manager import initialize_service, get_installed_models
-from modules.output_writer import write_markdown
+from modules.doc_writer import merge_sections
 
-# Configure logging
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.StreamHandler()])
+# Configure logging globally
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
 
-# Enhanced configuration schema
 config_schema = Schema({
     'models': {
         'default': And(str, len),
@@ -35,6 +36,7 @@ config_schema = Schema({
         Optional('sanitize'): bool
     }
 })
+
 
 async def process_module(module_info, output_data, config):
     module_name = module_info['name']
@@ -108,6 +110,16 @@ def is_affirmative(response):
     return response.strip().lower() in ['yes', 'y']
 
 
+def build_config():
+    try:
+        with open("config.json") as f:
+            config = json.load(f)
+        return config_schema.validate(config)
+    except (FileNotFoundError, json.JSONDecodeError, SchemaError) as e:
+        logging.error(f"❌ Config error: {str(e)}")
+        return None
+
+
 async def main():
     config = build_config()
     if not config:
@@ -123,7 +135,6 @@ async def main():
     generate_history = is_affirmative(input("📜 Generate history automatically? (yes/no): "))
     generate_faction = is_affirmative(input("🤼 Generate factions automatically? (yes/no): "))
     generate_exterior = is_affirmative(input("🌅 Generate exterior automatically? (yes/no): "))
-
 
     # Manual input collection
     if not generate_history:
@@ -177,34 +188,23 @@ async def main():
         else:
             independent.append(module)
 
-    # Parallel processing
+    # Parallel processing for independent modules
     await asyncio.gather(*[
         process_module(mod, output_data, config)
         for mod in independent
     ])
 
-    # Sequential processing
+    # Sequential processing for dependent modules
     for mod in dependent:
         await process_module(mod, output_data, config)
 
-    # Output generation
-    if 'error' not in output_data:
-        write_markdown(
-            filename=config['output']['file'],
-            data=output_data,
-            sanitize=config['output'].get('sanitize', True)
-        )
-    else:
-        logging.error("⛔ Aborting output generation due to errors")
+    # Merge individual section markdown files into final documentation.
+    merge_sections(final_filename="documentation.md",
+                   order=("history", "faction", "exterior", "dungeon_map"))
 
-def build_config():
-    try:
-        with open("config.json") as f:
-            config = json.load(f)
-        return config_schema.validate(config)
-    except (FileNotFoundError, json.JSONDecodeError, SchemaError) as e:
-        logging.error(f"❌ Config error: {str(e)}")
-        return None
+    # Optional: If any errors occurred, you could choose to not merge or flag the final document.
+    if 'error' in output_data:
+        logging.error("⛔ Some modules encountered errors. Please check the logs.")
 
 if __name__ == "__main__":
     asyncio.run(main())

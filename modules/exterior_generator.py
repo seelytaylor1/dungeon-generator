@@ -1,24 +1,36 @@
 import random
 import logging
+import re
 from typing import Dict, Any, Optional
 from modules import tables
-from modules.output_writer import OutputSanitizer
+from modules.doc_writer import write_section  # Updated import
 from ollama_manager import generate_with_retry  # Updated import
 
 logger = logging.getLogger(__name__)
 
+def sanitize(text: str) -> str:
+    """Robust content cleaning that preserves markdown syntax."""
+    # Remove internal <think>...</think> sections
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    # Allow markdown characters (# and *) in addition to the other punctuation.
+    cleaned = re.sub(r'[^\w\s.,!?\-:\'\"#*]', '', cleaned)
+    # Normalize newlines: collapse three or more newlines into two newlines.
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    return cleaned.strip()
+
 def generate_exterior(model: str, history_content: str, faction_content: str) -> Dict[str, Any]:
-    """Generate dungeon exterior description with integrated validation"""
+    """Generate dungeon exterior description with integrated validation."""
     try:
         logger.info("Starting exterior generation")
 
         # Validate required tables
         _validate_exterior_tables()
 
+        # Create components (faction_content is used only in metadata)
         components = _create_components(history_content, faction_content)
         descriptions = _generate_component_descriptions(model, components, history_content)
 
-        return {
+        result = {
             "content": "\n\n".join(descriptions.values()),
             "metadata": {
                 "components": {k: v[1] for k, v in components.items()},
@@ -29,12 +41,17 @@ def generate_exterior(model: str, history_content: str, faction_content: str) ->
             }
         }
 
+        # Write the exterior section to an exterior.md file.
+        write_section("exterior", result["content"])
+
+        return result
+
     except Exception as e:
         logger.error(f"Exterior generation failed: {str(e)}")
         return {"error": str(e)}
 
 def _validate_exterior_tables() -> None:
-    """Ensure required tables exist and are populated"""
+    """Ensure required tables exist and are populated."""
     required_tables = {
         "environment": 3,  # Minimum 3 options
         "path": 2,
@@ -51,7 +68,7 @@ def _validate_exterior_tables() -> None:
             raise ValueError(f"EXTERIOR_TABLES[{table}] needs at least {min_entries} entries")
 
 def _create_components(history: str, factions: str) -> Dict[str, tuple]:
-    """Create exterior components with smart selection logic"""
+    """Create exterior components with smart selection logic."""
     components = {}
 
     # Environment
@@ -65,7 +82,7 @@ def _create_components(history: str, factions: str) -> Dict[str, tuple]:
     # Path
     path = random.choice(tables.EXTERIOR_TABLES["path"])
     if path == "River":
-        detail = random.choice(tables.EXTERIOR_TABLES["river_details"])
+        detail = random.choice(tables.EXTERIOR_TABLES.get("river_details", ["murmuring waters"]))
         path = f"{path} ({detail})"
     components["path"] = ("Path", path)
 
@@ -83,7 +100,7 @@ def _create_components(history: str, factions: str) -> Dict[str, tuple]:
     return components
 
 def _generate_component_descriptions(model: str, components: Dict, history: str) -> Dict[str, str]:
-    """Generate descriptions using Ollama service"""
+    """Generate descriptions using Ollama service."""
     descriptions = {}
 
     for key, (name, value) in components.items():
@@ -99,7 +116,7 @@ def _generate_component_descriptions(model: str, components: Dict, history: str)
             if not response or not response.get("response"):
                 raise ValueError(f"Empty response for {name}")
 
-            descriptions[name] = OutputSanitizer.sanitize(response["response"])
+            descriptions[name] = sanitize(response["response"])
             logger.info(f"Generated {name} description")
 
         except Exception as e:
@@ -109,25 +126,25 @@ def _generate_component_descriptions(model: str, components: Dict, history: str)
     return descriptions
 
 def _build_component_prompt(component_name: str, component_value: str, history: str) -> str:
-    """Construct context-aware prompts"""
+    """Construct context-aware prompts."""
     prompts = {
-        "Environment": f"""Describe a {component_value} environment surrounding a dark fantasy dungeon. Include:
+        "Environment": f"""Describe a {component_value} environment surrounding a dark fantasy dungeon. 
 
 Context: {history}""",
 
-        "Path": f"""Detail a {component_value} leading to a dungeon. Include:
+        "Path": f"""Detail a {component_value} leading to a dungeon. 
 
 Context: {history}""",
 
-        "Landmark": f"""Describe a {component_value} near the dungeon. Include:
+        "Landmark": f"""Describe a landmark near the dungeon marked by {component_value}.
 
-History: {history}""",
+Context: {history}""",
 
-        "Secondary Entrance": f"""Describe a secret entrance: {component_value}. Include:
+        "Secondary Entrance": f"""Describe a secret entrance: {component_value}.
 
 Historical context: {history}""",
 
-        "Antechamber": f"""Describe an antechamber: {component_value}. Include:
+        "Antechamber": f"""Describe an antechamber: {component_value}. 
 
 Dungeon history: {history}"""
     }
