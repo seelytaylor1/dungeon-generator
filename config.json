@@ -1,13 +1,13 @@
 {
   "models": {
-    "default": "deepseek-r1:1.5b",
-    "fallback": "llama2"
+    "default": "openthinker:7b",
+    "fallback": "deepseek-r1:1.5b"
   },
   "modules": [
     {
       "name": "history",
       "function": "generate_history",
-      "model": "deepseek-r1:1.5b",
+      "model": "openthinker:7b",
       "priority": 1,
       "required_params": ["model"],
       "retries": 2,
@@ -30,14 +30,14 @@
       "timeout": 60
     },
     {
-          "name": "dungeon_map",
-          "function": "generate_dungeon_map",
-          "priority": 4,
-          "num_dice": 11,
-          "required_params": ["num_dice"],
-          "depends_on": ["history", "faction"],
-          "retries": 3,
-          "timeout": 45
+      "name": "dungeon_map",
+      "function": "generate_dungeon_map",
+      "priority": 4,
+      "num_dice": 11,
+      "required_params": ["num_dice"],
+      "depends_on": ["history", "faction"],
+      "retries": 3,
+      "timeout": 45
     }
   ],
   "output": {

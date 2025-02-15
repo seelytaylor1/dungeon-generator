@@ -16,6 +16,7 @@ def check_model_installed(model: str) -> bool:
     """Legacy compatibility wrapper"""
     return validate_model_config(model)
 
+
 # Configuration constants
 OLLAMA_PATHS = {
     'win32': [
@@ -31,9 +32,10 @@ OLLAMA_PATHS = {
 }
 
 OLLAMA_URL = "http://localhost:11434/"
-API_TIMEOUT = 45  # Increase timeout for complex generations
-STARTUP_TIMEOUT = 45
+API_TIMEOUT = 120  # Increase timeout for complex generations
+STARTUP_TIMEOUT = 120
 MINIMUM_MODEL_COUNT = 1  # Fail if no models installed
+
 
 def is_ollama_running(retries: int = 3) -> bool:
     """Check if Ollama service is responsive with retry logic."""
@@ -48,12 +50,13 @@ def is_ollama_running(retries: int = 3) -> bool:
         time.sleep(1 * attempt)
     return False
 
+
 def start_ollama() -> bool:
     """Start Ollama service with comprehensive process management."""
     try:
         # Check for existing processes
         for proc in psutil.process_iter(['name', 'exe']):
-            if any('ollama' in part.lower() for part in [proc.info['name'], str(proc.info['exe'])]):
+            if any('ollama' in part.lower() for part in [proc.name(), proc.exe()]):
                 logger.info("Found existing Ollama process")
                 return True
 
@@ -93,12 +96,14 @@ def start_ollama() -> bool:
         logger.exception("Critical failure during Ollama startup")
         return False
 
+
 def get_startup_info() -> subprocess.STARTUPINFO:
     """Get platform-specific startup configuration."""
     startupinfo = subprocess.STARTUPINFO()
     if sys.platform == 'win32':
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     return startupinfo
+
 
 def find_ollama_executable() -> Optional[Path]:
     """Locate Ollama executable with path validation."""
@@ -109,6 +114,7 @@ def find_ollama_executable() -> Optional[Path]:
             return expanded_path
     logger.warning("No valid Ollama executable found in configured paths")
     return None
+
 
 def get_installed_models(retries: int = 3) -> List[str]:
     """Retrieve list of installed models with robust error handling."""
@@ -138,6 +144,7 @@ def get_installed_models(retries: int = 3) -> List[str]:
     logger.error("Failed to retrieve installed models after multiple attempts")
     return []
 
+
 def validate_model_config(model: str) -> bool:
     """Validate model configuration with detailed diagnostics."""
     if not model.strip():
@@ -158,6 +165,7 @@ def validate_model_config(model: str) -> bool:
         return False
 
     return True
+
 
 def initialize_service() -> bool:
     """Initialize Ollama service with full verification."""
@@ -180,6 +188,7 @@ def initialize_service() -> bool:
 
     logger.error("Service started but no models detected")
     return False
+
 
 def generate_with_retry(
         prompt: str,
@@ -230,6 +239,7 @@ def generate_with_retry(
 
     logger.error(f"Generation failed after {retries} attempts")
     return None
+
 
 def cleanup_processes() -> None:
     """Clean up any lingering Ollama processes."""

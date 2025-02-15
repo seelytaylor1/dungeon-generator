@@ -1,5 +1,6 @@
 import json
 
+
 def extract_unique_trigrams(input_text):
     unique_trigrams = set()
 
@@ -12,6 +13,7 @@ def extract_unique_trigrams(input_text):
         unique_trigrams.add(trigram)
 
     return list(unique_trigrams)
+
 
 # Example input data
 input_data = """

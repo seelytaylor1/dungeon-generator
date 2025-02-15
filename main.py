@@ -10,7 +10,7 @@ from modules.doc_writer import merge_sections
 
 # Configure logging globally
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler()]
 )
@@ -43,7 +43,7 @@ async def process_module(module_info, output_data, config):
     function_name = module_info['function']
     default_model = config['models']['default']
     max_retries = module_info.get('retries', 1)
-    timeout = module_info.get('timeout', 30)
+    timeout = module_info.get('timeout', 400)
 
     # Check dependencies
     dependencies = module_info.get('depends_on', [])

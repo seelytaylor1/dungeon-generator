@@ -8,8 +8,9 @@ from ollama_manager import generate_with_retry  # Updated import
 
 logger = logging.getLogger(__name__)
 
+
 def sanitize(text: str) -> str:
-    """Robust content cleaning that preserves markdown syntax."""
+    """Robust content cleaning that preserves Markdown syntax."""
     # Remove internal <think>...</think> sections
     cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
     # Allow markdown characters (# and *) in addition to the other punctuation.
@@ -17,6 +18,7 @@ def sanitize(text: str) -> str:
     # Normalize newlines: collapse three or more newlines into two newlines.
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
     return cleaned.strip()
+
 
 def generate_exterior(model: str, history_content: str, faction_content: str) -> Dict[str, Any]:
     """Generate dungeon exterior description with integrated validation."""
@@ -50,6 +52,7 @@ def generate_exterior(model: str, history_content: str, faction_content: str) ->
         logger.error(f"Exterior generation failed: {str(e)}")
         return {"error": str(e)}
 
+
 def _validate_exterior_tables() -> None:
     """Ensure required tables exist and are populated."""
     required_tables = {
@@ -66,6 +69,7 @@ def _validate_exterior_tables() -> None:
             raise ValueError(f"Missing EXTERIOR_TABLES entry: {table}")
         if len(tables.EXTERIOR_TABLES[table]) < min_entries:
             raise ValueError(f"EXTERIOR_TABLES[{table}] needs at least {min_entries} entries")
+
 
 def _create_components(history: str, factions: str) -> Dict[str, tuple]:
     """Create exterior components with smart selection logic."""
@@ -99,6 +103,7 @@ def _create_components(history: str, factions: str) -> Dict[str, tuple]:
 
     return components
 
+
 def _generate_component_descriptions(model: str, components: Dict, history: str) -> Dict[str, str]:
     """Generate descriptions using Ollama service."""
     descriptions = {}
@@ -124,6 +129,7 @@ def _generate_component_descriptions(model: str, components: Dict, history: str)
             descriptions[name] = f"{name} description unavailable"
 
     return descriptions
+
 
 def _build_component_prompt(component_name: str, component_value: str, history: str) -> str:
     """Construct context-aware prompts."""

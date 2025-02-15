@@ -1,82 +1,105 @@
 import random
 import logging
 import re
-from typing import Dict, Any, Optional
+from datetime import datetime
+from typing import Dict, Any, List
 from modules import tables
-from modules.doc_writer import write_section  # Use the new writer
+from modules.doc_writer import write_section
+from modules.name_generator import generate_random_name
 from ollama_manager import generate_with_retry
 
 logger = logging.getLogger(__name__)
 
+
 def sanitize(text: str) -> str:
-    """
-    Perform basic sanitization to remove internal <think>...</think> sections.
-    This function preserves most text formatting.
-    """
-    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    """Universal content cleaner"""
+    cleaned = re.sub(r'<\|.*?\|>', '', text, flags=re.DOTALL)
+    cleaned = re.sub(r'\n#{2,}', '\n##', cleaned)  # Normalize headers
     return cleaned.strip()
 
+
 def generate_factions(model: str, history_content: str) -> Dict[str, Any]:
-    """Generate dungeon factions using the configured model and write the output."""
+    """Main faction generation controller"""
     try:
-        num_factions = random.randint(1, 3)
-        logger.info(f"Generating {num_factions} faction(s)")
+        logger.info("🤼 Starting faction generation...")
 
-        factions = []
-        for i in range(num_factions):
-            faction = _generate_single_faction(model, history_content, i + 1)
-            if faction:
-                factions.append(faction)
+        factions = _generate_faction_set(model, history_content)
+        metadata = _build_faction_metadata(factions)
 
-        result = {
-            "num_factions": len(factions),
-            "factions": factions
-        }
-        # Build markdown content from faction data.
-        markdown_content = _build_faction_markdown(result)
-        # Write the markdown content to a file (e.g., faction.md in the docs/ folder).
+        markdown_content = _build_faction_markdown(factions, metadata)
         write_section("faction", markdown_content)
 
-        return result
+        logger.info("✅ Faction generation complete!")
+        return {
+            "factions": factions,
+            "metadata": metadata
+        }
 
     except Exception as e:
         logger.error(f"Faction generation failed: {str(e)}")
         return {"error": str(e)}
 
-def _generate_single_faction(model: str, history: str, index: int) -> Optional[Dict]:
-    """Generate a single faction with retry logic."""
-    try:
-        details = _assemble_faction_details()
-        prompt = _create_faction_prompt(details, history)
 
-        logger.info(f"Generating faction {index} using model {model}")
-        response = generate_with_retry(
-            prompt=prompt,
-            model=model,
-            temperature=0.8,
-            top_p=0.9
-        )
+def _generate_faction_set(model: str, history: str) -> List[Dict[str, Any]]:
+    """Generate validated faction set with error resilience"""
+    faction_count = random.randint(1, 3)
+    logger.debug(f"Attempting to generate {faction_count} factions")
 
-        if not response:
-            raise ValueError("Empty response from generation API")
+    factions = []
+    for i in range(faction_count):
+        try:
+            faction = _generate_single_faction(model, history, i + 1)
+            if faction and faction.get('content'):
+                factions.append(faction)
+        except Exception as e:
+            logger.warning(f"Faction {i + 1} failed: {str(e)}")
 
-        return {
-            **details,
-            "content": sanitize(response.get("response", ""))
-        }
+    if not factions:
+        raise RuntimeError("All faction generation attempts failed")
+    return factions
 
-    except Exception as e:
-        logger.error(f"Failed to generate faction {index}: {str(e)}")
-        return None
 
-def _assemble_faction_details() -> Dict[str, str]:
-    """Assemble faction components from tables with validation."""
-    required_tables = ["goal", "obstacle", "impulse", "size", "creature_type"]
-    for table in required_tables:
-        if not tables.FACTION_TABLES.get(table):
-            raise ValueError(f"Missing required FACTION_TABLES entry: {table}")
+def _generate_single_faction(model: str, history: str, index: int) -> Dict[str, Any]:
+    """Generate individual faction with enhanced error handling"""
+    details = _assemble_faction_details()
+    prompt = _create_faction_prompt(details, history)
+
+    logger.debug(f"Generating faction {index} with prompt:\n{prompt[:500]}...")  # Truncate for logs
+    response = generate_with_retry(
+        prompt=prompt,
+        model=model,
+        temperature=0.5,
+        top_p=0.9
+    )
+
+    if not response or not response.get('response'):
+        raise ValueError("Empty model response")
+
+    raw_content = response['response'].strip()
+
+    # Flexible solution extraction
+    solution_match = re.search(
+        r'<\|begin_of_solution\|>(.*?)(<\|end_of_solution\|>|$)',
+        raw_content,
+        re.DOTALL
+    )
+
+    if solution_match:
+        content = sanitize(solution_match.group(1))
+    else:
+        logger.warning("Using full response as fallback content")
+        content = sanitize(raw_content)
 
     return {
+        **details,
+        "content": content
+    }
+
+
+def _assemble_faction_details() -> Dict[str, str]:
+    """Build faction details with generated name"""
+    return {
+        "name": generate_random_name(),
         "goal": random.choice(tables.FACTION_TABLES["goal"]),
         "obstacle": random.choice(tables.FACTION_TABLES["obstacle"]),
         "impulse": random.choice(tables.FACTION_TABLES["impulse"]),
@@ -84,52 +107,63 @@ def _assemble_faction_details() -> Dict[str, str]:
         "creature_type": random.choice(tables.FACTION_TABLES["creature_type"])
     }
 
+
 def _create_faction_prompt(details: Dict[str, str], history: str) -> str:
-    """Create a structured generation prompt for a faction."""
-    return f"""Create a dark fantasy faction description with these elements:
+    """Structured prompt with name enforcement"""
+    return f"""Create a detailed fantasy faction description using this EXACT name: {details['name']}
 
-1. Faction Name (Original and thematic)
-2. Core Goal: {details['goal']}
-3. Primary Obstacle: {details['obstacle']}
-4. Driving Impulse: {details['impulse']}
-5. Organization Size: {details['size']}
-6. Creature Type: {details['creature_type']}
-
-Historical Context:
+Dungeon History Context:
 {history}
 
-Include:
-- Leadership structure
-- Key locations they control
-- Relationship to other factions
-- Signature abilities/resources
-- A 2-3 sentence description of their current activities.
+Faction Elements:
+- Goal: {details['goal']}
+- Primary Obstacle: {details['obstacle']}
+- Driving Impulse: {details['impulse']}
+- Organization Size: {details['size']}
+- Creature Type: {details['creature_type']}
+
+Required Sections:
+## Faction History
+## Faction Leadership
+## Current Activities
 """
 
-def _build_faction_markdown(faction_data: Dict[str, Any]) -> str:
-    """Convert faction data into a well-formatted markdown string."""
-    md_lines = []
-    md_lines.append("# Faction Documentation")
-    md_lines.append("")
-    md_lines.append(f"**Number of factions:** {faction_data.get('num_factions', 0)}")
-    md_lines.append("")
 
-    for faction in faction_data.get("factions", []):
-        md_lines.append("## Faction")
-        # If your faction details include a faction name, display it.
-        # Otherwise, display the goal as a title.
-        faction_name = faction.get("name", faction.get("goal", "Unnamed Faction"))
-        md_lines.append(f"**Faction Name:** {faction_name}")
-        md_lines.append(f"**Core Goal:** {faction.get('goal', '')}")
-        md_lines.append(f"**Primary Obstacle:** {faction.get('obstacle', '')}")
-        md_lines.append(f"**Driving Impulse:** {faction.get('impulse', '')}")
-        md_lines.append(f"**Organization Size:** {faction.get('size', '')}")
-        md_lines.append(f"**Creature Type:** {faction.get('creature_type', '')}")
-        md_lines.append("")
-        md_lines.append("**Description:**")
-        md_lines.append(faction.get("content", ""))
-        md_lines.append("")
-        md_lines.append("---")
-        md_lines.append("")
+def _build_faction_metadata(factions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Generate comprehensive metadata"""
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "num_factions": len(factions),
+        "names": [f["name"] for f in factions],
+        "creature_types": list(set(f["creature_type"] for f in factions)),
+        "size_distribution": [f["size"] for f in factions],
+        "common_goals": list(set(f["goal"] for f in factions))
+    }
 
-    return "\n".join(md_lines)
+
+def _build_faction_markdown(factions: List[Dict[str, Any]], metadata: Dict[str, Any]) -> str:
+    """Build complete faction documentation"""
+    md = [
+        "# Faction Documentation",
+        f"*Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
+        "\n## Overview",
+        f"**Number of Factions**: {metadata['num_factions']}",
+        f"**Generated Names**: {', '.join(metadata['names'])}",
+        f"**Creature Types**: {', '.join(metadata['creature_types'])}",
+        f"**Common Goals**: {', '.join(metadata['common_goals'])}",
+        "\n## Faction Details"
+    ]
+
+    for faction in factions:
+        md.extend([
+            f"\n### {faction['name']}",
+            f"**Creature Type**: {faction['creature_type']}",
+            f"**Core Goal**: {faction['goal']}",
+            f"**Primary Obstacle**: {faction['obstacle']}",
+            f"**Organization Size**: {faction['size']}",
+            "\n#### Description",
+            faction['content'],
+            "\n---"
+        ])
+
+    return '\n'.join(md)
