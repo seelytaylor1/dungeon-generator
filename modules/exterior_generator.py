@@ -1,51 +1,55 @@
 import random
 import logging
 import re
-from typing import Dict, Any, Optional
+from datetime import datetime
+from typing import Dict, Any
 from modules import tables
-from modules.doc_writer import write_section  # Updated import
-from ollama_manager import generate_with_retry  # Updated import
+from modules.doc_writer import write_section
+from ollama_manager import generate_with_retry
+from modules.prompts import EXTERIOR_PROMPTS
 
 logger = logging.getLogger(__name__)
 
 
-def sanitize(text: str) -> str:
-    """Robust content cleaning that preserves Markdown syntax."""
-    # Remove internal <think>...</think> sections
-    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-    # Allow markdown characters (# and *) in addition to the other punctuation.
-    cleaned = re.sub(r'[^\w\s.,!?\-:\'\"#*]', '', cleaned)
-    # Normalize newlines: collapse three or more newlines into two newlines.
-    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
-    return cleaned.strip()
+def extract_solution(text: str) -> str:
+    """
+    Extracts and returns the text between <|begin_of_solution|> and <|end_of_solution|>.
+    If these markers are not present, returns the entire text.
+    """
+    match = re.search(r'<\|begin_of_solution\|>(.*?)<\|end_of_solution\|>', text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text.strip()
 
 
 def generate_exterior(model: str, history_content: str, faction_content: str) -> Dict[str, Any]:
-    """Generate dungeon exterior description with integrated validation."""
+    """Generate dungeon exterior with integrated validation."""
     try:
-        logger.info("Starting exterior generation")
+        logger.info("🌅 Starting exterior generation...")
 
-        # Validate required tables
+        # Validate required exterior tables exist
         _validate_exterior_tables()
 
-        # Create components (faction_content is used only in metadata)
+        # Create exterior components (e.g., environment, path, landmark, etc.)
         components = _create_components(history_content, faction_content)
+
+        # Generate detailed descriptions for each component using the LLM
         descriptions = _generate_component_descriptions(model, components, history_content)
 
+        # Build result content by joining each component's section with headers
         result = {
-            "content": "\n\n".join(descriptions.values()),
+            "content": "\n\n".join([
+                f"## {name}\n{desc}" for name, desc in descriptions.items()
+            ]),
             "metadata": {
                 "components": {k: v[1] for k, v in components.items()},
-                "sources": {
-                    "history": history_content[:200] + "..." if len(history_content) > 200 else history_content,
-                    "factions": faction_content[:200] + "..." if len(faction_content) > 200 else faction_content
-                }
+                "generated_at": datetime.now().isoformat()
             }
         }
 
-        # Write the exterior section to an exterior.md file.
+        # Write the complete exterior description to the markdown section
         write_section("exterior", result["content"])
-
+        logger.info("✅ Exterior generation complete!")
         return result
 
     except Exception as e:
@@ -53,17 +57,31 @@ def generate_exterior(model: str, history_content: str, faction_content: str) ->
         return {"error": str(e)}
 
 
+def _build_component_prompt(component_name: str, component_value: str, history: str,
+                            environment_context: str = "") -> str:
+    """Construct prompts using centralized templates."""
+    try:
+        template = EXTERIOR_PROMPTS[component_name]
+        return template.format(
+            component_value=component_value,
+            history=history,
+            environment_context=environment_context
+        )
+    except KeyError:
+        logger.warning(f"No template found for {component_name}")
+        return f"Describe {component_name} with: {component_value} (History: {history})"
+
+
 def _validate_exterior_tables() -> None:
     """Ensure required tables exist and are populated."""
     required_tables = {
-        "environment": 3,  # Minimum 3 options
+        "environment": 3,
         "path": 2,
         "landmark": 2,
         "secondary_entrance_location": 2,
         "secondary_entrance_destination": 2,
         "antechamber": 2
     }
-
     for table, min_entries in required_tables.items():
         if table not in tables.EXTERIOR_TABLES:
             raise ValueError(f"Missing EXTERIOR_TABLES entry: {table}")
@@ -83,11 +101,11 @@ def _create_components(history: str, factions: str) -> Dict[str, tuple]:
         env = f"{env1}/{env2}"
     components["environment"] = ("Environment", env)
 
-    # Path
+    # Path - Incorporate extra details for "Patrolled" type
     path = random.choice(tables.EXTERIOR_TABLES["path"])
-    if path == "River":
-        detail = random.choice(tables.EXTERIOR_TABLES.get("river_details", ["murmuring waters"]))
-        path = f"{path} ({detail})"
+    if path.startswith("Patrolled"):
+        patrol_detail = random.choice(tables.EXTERIOR_TABLES["path_patrolled"])
+        path = f"{path} {patrol_detail}"
     components["path"] = ("Path", path)
 
     # Landmark
@@ -104,24 +122,43 @@ def _create_components(history: str, factions: str) -> Dict[str, tuple]:
     return components
 
 
-def _generate_component_descriptions(model: str, components: Dict, history: str) -> Dict[str, str]:
-    """Generate descriptions using Ollama service."""
+def _generate_component_descriptions(model: str, components: Dict[str, tuple], history: str) -> Dict[str, str]:
+    """Generate descriptions for each exterior component using the LLM service."""
     descriptions = {}
 
+    # Generate environment first
+    env_prompt = _build_component_prompt("Environment", components["environment"][1], history)
+    env_response = generate_with_retry(
+        prompt=env_prompt,
+        model=model,
+        temperature=0.85,
+        top_p=0.9
+    )
+
+    if not env_response or not env_response.get("response"):
+        raise ValueError("Empty response for Environment")
+
+    environment_description = extract_solution(env_response["response"])
+    descriptions["Environment"] = environment_description
+    logger.info("Generated Environment description")
+
+    # Generate remaining components with environment context
     for key, (name, value) in components.items():
+        if name == "Environment":
+            continue  # Skip, already processed
+
         try:
-            prompt = _build_component_prompt(name, value, history)
+            prompt = _build_component_prompt(name, value, history, environment_description)
             response = generate_with_retry(
                 prompt=prompt,
                 model=model,
                 temperature=0.85,
                 top_p=0.9
             )
-
             if not response or not response.get("response"):
                 raise ValueError(f"Empty response for {name}")
 
-            descriptions[name] = sanitize(response["response"])
+            descriptions[name] = extract_solution(response["response"])
             logger.info(f"Generated {name} description")
 
         except Exception as e:
@@ -129,30 +166,3 @@ def _generate_component_descriptions(model: str, components: Dict, history: str)
             descriptions[name] = f"{name} description unavailable"
 
     return descriptions
-
-
-def _build_component_prompt(component_name: str, component_value: str, history: str) -> str:
-    """Construct context-aware prompts."""
-    prompts = {
-        "Environment": f"""Describe a {component_value} environment surrounding a dark fantasy dungeon. 
-
-Context: {history}""",
-
-        "Path": f"""Detail a {component_value} leading to a dungeon. 
-
-Context: {history}""",
-
-        "Landmark": f"""Describe a landmark near the dungeon marked by {component_value}.
-
-Context: {history}""",
-
-        "Secondary Entrance": f"""Describe a secret entrance: {component_value}.
-
-Historical context: {history}""",
-
-        "Antechamber": f"""Describe an antechamber: {component_value}. 
-
-Dungeon history: {history}"""
-    }
-
-    return prompts.get(component_name, f"Describe the {component_name}: {component_value}")

@@ -2507,8 +2507,79 @@ RANDOM_NAME = {
         "CUP",
         "SHU"
     ],
-    "nouns": ["Blade", "Hammer", "Shield", "Heart", "Crown", "Stone", "Flame", "Storm"],
-    "verbs": ["Strike", "Rise", "Fall", "Shatter", "Forge", "Burn", "Whisper"]
+    "nouns": [
+        "Blade", "Hammer", "Shield", "Heart", "Crown", "Stone", "Flame", "Storm",
+        "Fang", "Claw", "Spear", "Helm", "Chalice", "Orb", "Tome", "Grimoire",
+        "Runestone", "Totem", "Torch", "Sigil", "Wyrm", "Serpent", "Dragon",
+        "Dagger", "Axe", "Warhorn", "Gauntlet", "Banner", "Obsidian", "Sapphire",
+        "Ruby", "Emerald", "Onyx", "Ivory", "Glaive", "Pike", "Bracer", "Amulet",
+        "Talisman", "Scroll", "Relic", "Idol", "Coffer", "Vault", "Pyre", "Crypt",
+        "Tomb", "Sepulcher", "Cairn", "Censer", "Vestige", "Fetish", "Wraith",
+        "Revenant", "Shade", "Specter", "Phantom", "Ghoul", "Wight", "Lich",
+        "Doom", "Fury", "Wrath", "Havoc", "Thunder", "Tempest", "Gale", "Torrent",
+        "Inferno", "Abyss", "Void", "Chasm", "Fissure", "Ruin", "Oblivion", "Eclipse",
+        "Corona", "Zephyr", "Basilisk", "Chimera", "Leviathan", "Manticore", "Gorgon",
+        "Cyclops", "Ogre", "Titan", "Colossus", "Sentinel", "Warden", "Overlord",
+        "Conqueror", "Warrior", "Slayer", "Executioner", "Champion", "Myrmidon",
+        "Legion", "Phalanx", "Spire", "Citadel", "Bastion", "Fortress", "Keep",
+        "Labyrinth", "Maze", "Sanctum", "Temple", "Shrine", "Catacomb", "Monolith",
+        "Pillar", "Obelisk", "Reliquary", "Coven", "Pact", "Cabal", "Oath",
+        "Vow", "Blood", "Bone", "Flesh", "Marrow", "Ash", "Charcoal", "Furnace",
+        "Forge", "Anvil", "Furnace", "Crucible", "Brand", "Carcanet", "Coronet",
+        "Diadem", "Gorget", "Greave", "Hauberk", "Pauldron", "Vambrace", "Warlock",
+        "Sorcerer", "Witch", "Mystic", "Seer", "Oracle", "Prophet", "Harbinger",
+        "Nemesis", "Bane", "Scourge", "Pestilence", "Plague", "Venom", "Poison",
+        "Elixir", "Potion", "Draught", "Remedy", "Salve", "Tincture", "Hex",
+        "Curse", "Omen", "Portent", "Augury", "Divination", "Fate", "Destiny",
+        "Wyrd", "Twilight", "Dusk", "Dawn", "Midnight", "Noon", "Sun", "Moon",
+        "Star", "Comet", "Eclipse", "Shadow", "Gloom", "Darkness", "Nightmare",
+        "Dream", "Reckoning", "Judgment", "Glory", "Honor", "Valor", "Virtue",
+        "Sin", "Vice", "Treachery", "Betrayal", "Deception", "Guile", "Tyrant",
+        "Despot", "Monarch", "Sovereign", "Usurper", "Wanderer", "Nomad", "Vagrant",
+        "Outlaw", "Brigand", "Marauder", "Raider", "Corsair", "Buccaneer", "Prowler"
+    ],
+    "verbs": [
+        "Strike", "Rise", "Fall", "Shatter", "Forge", "Burn", "Whisper",
+        "Carve", "Cleave", "Pierce", "Smite", "Crush", "Rend", "Sever",
+        "Brandish", "Unleash", "Summon", "Invoke", "Channel", "Command",
+        "Conquer", "Dominate", "Banish", "Exile", "Unravel", "Decimate",
+        "Destroy", "Annihilate", "Shroud", "Ensnare", "Bind", "Sunder",
+        "Wield", "Enchant", "Empower", "Devour", "Consume", "Reap",
+        "Sow", "Tame", "Subjugate", "Incant", "Chant", "Hex", "Curse",
+        "Bless", "Consecrate", "Desecrate", "Sacrifice", "Offer", "Avenge",
+        "Revenge", "Lurk", "Prowl", "Stalk", "Hunt", "Track", "Escape",
+        "Flee", "Pursue", "Chase", "Ambush", "Betray", "Deceive", "Duel",
+        "Challenge", "Defy", "Rebel", "Overthrow", "Ascend", "Descend",
+        "Collapse", "Erupt", "Engulf", "Quell", "Extinguish", "Subdue",
+        "Strike", "Hack", "Gash", "Lash", "Impale", "Gouge", "Slay",
+        "Maim", "Wound", "Bleed", "Glisten", "Gleam", "Glare", "Shine",
+        "Radiate", "Glow", "Scorch", "Incinerate", "Freeze", "Chill",
+        "Petrify", "Corrupt", "Poison", "Venomate", "Wither", "Decay",
+        "Rot", "Crumble", "Cower", "Quake", "Tremble", "Howl", "Scream",
+        "Shriek", "Bellow", "Roar", "Echo", "Resonate", "Siphon",
+        "Drain", "Leech", "Sap", "Weave", "Unravel", "Transmute",
+        "Manifest", "Shift", "Twist", "Distort", "Warp", "Meld",
+        "Merge", "Fracture", "Dissolve", "Scatter", "Disperse",
+        "Repel", "Absorb", "Reflect", "Deflect", "Guard", "Shield",
+        "Parry", "Counter", "Endure", "Persevere", "Survive", "Prevail",
+        "Triumph", "Vanquish", "Submerge", "Drown", "Suffocate",
+        "Choke", "Strangle", "Snare", "Trap", "Constrict", "Envelop",
+        "Engulf", "Burst", "Explode", "Detonate", "Thunder", "Crackle",
+        "Seethe", "Boil", "Bubble", "Emanate", "Evoke", "Foresee",
+        "Prophesy", "Discern", "Bewitch", "Mesmerize", "Hypnotize",
+        "Gaze", "Glower", "Glare", "Sneer", "Snarl", "Sneak", "Slip",
+        "Skulk", "Dodge", "Evade", "Sidestep", "Lunge", "Thrust",
+        "Charge", "Rush", "Hurl", "Launch", "Catapult", "Unravel",
+        "Weaken", "Diminish", "Deteriorate", "Degenerate", "Corrode",
+        "Erode", "Eradicate", "Vanish", "Disintegrate", "Perish",
+        "Fade", "Eclipse", "Obscure", "Conceal", "Veil", "Mask",
+        "Enchant", "Bewitch", "Glamour", "Haunt", "Torment", "Lament",
+        "Mourn", "Weep", "Cry", "Suffer", "Endure", "Persist", "Persist",
+        "Relinquish", "Surrender", "Yield", "Obey", "Resist", "Revolt",
+        "Defend", "Fortify", "Bolster", "Reinforce", "Muster", "Rally",
+        "Summon", "Conjure", "Invoke", "Imbue", "Transcend", "Awaken",
+        "Enlighten", "Illuminate", "Quicken", "Hasten", "Dash", "Sprint"
+    ]
 }
 FACTION_TABLES = {
     # Factions
@@ -3408,3 +3479,106 @@ TREASURE_TABLES = {
         "trinket"
     ]
 }
+EXPERIENCE_TABLES = {
+    "Sensory": [
+        "Handout. This experience focuses on giving the players a new game piece – luck token, magic item, secret "
+        "objective, one-use ability, quest card—any new piece of gameplay in physical format."
+    ],
+    "Immersion": [
+        "Reinforce Theme. This room should double down on the dungeon theme. Show us what this dungeon is all about.",
+        "Arcane Stuff. Chance for the wizard to excel in interacting with the arcane: deciphering ancient text, discerning runes, manipulating magic devices.",
+        "Priest Stuff. Chance for priests to excel with the religious: ancient rituals, dealing with undead, de-cursing altars.",
+        "Thief Stuff. It’s a chance for a thief to excel in thief stuff: picking locks, sneaking, climbing, impersonation.",
+        "Fighter Stuff. It is a chance for fighters to excel in fighter stuff: moving heavy/stuck objects, displaying dexterity or physical prowess, mastery of weapons and armor.",
+        "Wonder. Some evocative piece of fiction – either larger than life or deeply personal. We want to touch the feelings of the players."
+    ],
+    "Narrative": [
+        "Foreshadow. Foreshadow some future danger in the dungeon.",
+        "Character Beat. This room has an opportunity for a character beat – we should learn something important about a critical character.",
+        "Escalation. Escalate the danger ahead of anything previously encountered.",
+        "Glorious Death. It’s an opportunity for a player to go out in a blaze of glory. Players should be rewarded for their PCs death: treasure, magic item, unique ability, or other benefit abilities for their next character.",
+        "Twist. Something or someone in this room is not what it initially appears to be – for better or worse.",
+        "Melancholic. This room contains a downbeat – something beautiful, sad, or peaceful.",
+        "Harrowing. Characters narrowly avoid death – maybe they even win. But if they do, they also lose something: HP, items, treasure, time.",
+        "Conflict. This room contains a conflict between two opposing forces, factions, or ideologies.",
+        "Crushing Victory. The players handily win against some challenge."
+    ],
+    "Challenge": [
+        "Two Roads. The players face a difficult choice, and choosing one option closes the other avenue of action, forever.",
+        "Circumvention. This challenge can be avoided, short-circuited or rendered trivial by clever players.",
+        "Expense. This room offers an easy solution at the price of a limited resource: spells, time, treasure, HP.",
+        "Hard Road. This room offers an optional, complex challenge. Players can choose to not engage with it without penalty.",
+        "Obstacle. This room poses a difficult challenge! Sometimes straightforward is fun, too.",
+        "Skin the Cat. This room poses a mandatory challenge, but with an open-ended solution. In fact, don’t design with any solutions in mind."
+    ],
+    "Fellowship": [
+        "Teamwork. A challenge in this room require multiple characters to work together to succeed. One character can’t do it alone.",
+        "The Save. This room has a danger. Once someone is in trouble, only another character can save them.",
+        "Temptation. There is a temptation in this room for one character to harm their allies for a benefit. Avoid consequences that are too serious.",
+        "Alternatively, you could allow players to harm future players of this dungeon for a benefit now, or harm themselves for a benefit later.",
+        "Big Roll. A single d20 roll will resolve the outcome of a high-stakes situation. This is when everyone tunes in and cares about the result of a roll.",
+        "Thespians. Players have a chance to roleplay with each other.",
+        "Dark Souls. Give the player a chance to help or hinder a player in a future game: leave a note or item, open a door, or something else."
+    ],
+    "Discovery": [
+        "Many Roads. Players should be able to go to many other rooms from this room.",
+        "Strangeness. Some inexplicable dungeon phenomena are present in this room. This lends a feeling of weirdness and mystery to your world.",
+        "Hidden Reward. A hidden treasure, boon, or reward is hidden in this room. But players must engage with the fiction to discover it: mess with stuff, interrogate NPC, search behind bookcases, or something else.",
+        "Experimentation. There’s something here to experiment with – either to receive a boon or a bane.",
+        "Discovery. The player should discover something important in this room. A clue that reveals the lich’s identity. A manuscript that shows all the secret doors.",
+        "Curiosity. Something obvious and interesting is present in this room. A hanging corpse, a sword driven into stone, or a caged prisoner."
+    ],
+    "Expression": [
+        "Negotiation. A chance to negotiate with an NPC so the player can explore their character’s behaviour. This could be a dungeon denizen, a lost local, or another crawler.",
+        "Moral Choice. Present a moral quandary so the player can explore their character’s beliefs. Do they drain the only local source of water to more easily pass through a room?",
+        "Allyship. Chance to ally with, or betray, a faction.",
+        "Creative Challenge. Present a challenge that requires players to go beyond their sheet to solve.",
+        "Create Fiction. Give the player a chance to create fiction about the dungeon, the world, or their character.",
+        "Alter Character. Give players a chance to alter their character permanently:robot arm, arcane tattoo, or something else."
+    ],
+    "Abdication": [
+        "The Gamble. The player has a chance to take an opportunity for a big reward. The reward and risk need to be known. Dice with death for a free heal, but risk instant death.",
+        "The Risk. The player has a chance to take a risk. It’s unclear what the outcome will be, but players can do it anyway.",
+        "Straightforward Fight. This room contains a combat encounter of easy difficulty. Players want to roll d20s and slap some monsters around!",
+        "Alt Objective. Give the players some new objective they can take up the mantle for, other than loot acquisition.",
+        "Low Stakes. The encounter in this room should be silly and low-stakes."
+    ]
+}
+ENCOUNTER_TABLES = {
+    "combat": [
+        "Tactical Combat. A normal faction monster group was found in a room alongside either a hazard (deep water, mist, etc.) or trap",
+        "Easy Combat. It’s a faction monster group that is slightly easier than average.",
+        "Powerful Foe. A faction monster that is harder than average.",
+        "Negotiable Foe. A faction monster group that has a reason to negotiate. Still use reaction roles; pre-plan the negotiable topic.",
+        "Mindless Foe. It’s a non-faction monster that can’t be parlayed.",
+        "Objective Combat. Objective combats are scenarios when more than defeating or routing the other side is required."
+    ],
+    "treasure": [
+        "Consumable. Potion, scroll wand, 1d4 torch, 1d4 piton. 2-in-6 chance it’s hidden in the room.",
+        "Useful Gear. Weapon, armor, adventure gear. There’s a 2-in-6 chance it’s hidden in the room.",
+        "Minor Treasure. Roll with DISADV on the treasure table appropriate for the PC’s LV. There’s a 2-in-6 chance it’s hidden in the room.",
+        "Normal Treasure. Roll on the treasure table appropriate for the PCs LV. There’s a 1-in-6 chance it’s hidden in the room.",
+        "Fabulous Treasure. Roll with ADV on the treasure table appropriate for the PCs LV. There’s a 1-in-6 chance it’s hidden in the room.",
+        "Magic Item. Roll a random magic item. There’s a 1-in-6 chance it’s hidden in the room."
+    ],
+    "skill challenge": [
+        "Trap.",
+        "Hazard. Deep water, mist, or something else.",
+        "Locked Door. See Lock & Key Generator.",
+        "Puzzle. See Puzzle Generator.",
+        "Secret Door. See Secret Door Generator.",
+        "Curiosity. Some dungeon curiosity: magic pool, strange device, cursed relic. A chance for players to experiment and reap some boon or bane."
+    ],
+    "set dressing": [
+        "Unknowable Mystery. Some bizzare item, architecture, book, or phenomena. Get wild – there’s no hint in the dungeon on what this is. Perhaps it’s a hint at your world’s deep lore.",
+        "Lore. One to five clues can be found in this room.",
+        "Friendly NPC. Crawler, wandering merchant, or other non-combatant. Someone with no interest in fighting the PCs."
+    ]
+}
+ENCOUNTER_RATIO = {
+    "combat": 2,
+    "treasure": 2,
+    "skill challenge": 2,
+    "set dressing": 1
+}
+RATIO_SUM = sum(ENCOUNTER_RATIO.values())

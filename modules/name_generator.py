@@ -1,5 +1,5 @@
 import random
-from modules import tables  # Assumes tables.py loads tables.json and defines RANDOM_NAME
+from modules import tables
 
 
 def generate_random_name():
@@ -18,11 +18,11 @@ def generate_random_name():
       - X is a verb.
       - Z is a place name built from one of the W formats.
     """
-    # Get the random name choices from tables.json via tables.RANDOM_NAME.
+    # Get the random name choices from tables.RANDOM_NAME.
     random_data = tables.RANDOM_NAME
-    syllables = random_data.get("syllables", ["ka", "ra", "lo", "zu", "mi", "ta", "fe", "ni", "do", "si"])
-    nouns = random_data.get("nouns", ["Blade", "Hammer", "Shield", "Heart", "Crown", "Stone", "Flame", "Storm"])
-    verbs = random_data.get("verbs", ["Strike", "Rise", "Fall", "Shatter", "Forge", "Burn", "Whisper"])
+    syllables = random_data.get("syllables", [])
+    nouns = random_data.get("nouns", [])
+    verbs = random_data.get("verbs", [])
 
     # Choose one of the six formats at random.
     format_choice = random.choice([1, 2, 3, 4, 5, 6])
@@ -58,6 +58,7 @@ def generate_random_name():
         name = f"{w} the {noun} of {z}"
 
     return name
+
 
 # Example usage:
 if __name__ == "__main__":

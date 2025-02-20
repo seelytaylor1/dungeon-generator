@@ -3,12 +3,10 @@ import math
 import uuid
 import logging
 import numpy as np
-from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass, asdict
 import matplotlib.pyplot as plt
 import networkx as nx
-
-# Import our doc writer for writing sections.
+from typing import Dict, Any, List, Optional, Tuple
+from dataclasses import dataclass, asdict
 from modules.doc_writer import write_section
 
 logger = logging.getLogger(__name__)
@@ -26,13 +24,11 @@ DICE_ROOM_TYPES = {
     'd12': 'Special feature (river, chasm, tunnel)',
     'd20': 'Grand hall or important chamber'
 }
-ROOM_FEATURES = [
-    'Treasure', 'Trap', 'Secret Door',
-    'Puzzle', 'Monster Encounter', 'Hidden Passage'
-]
+
 POSITION_JITTER = 1.2
 CLUSTER_SPREAD = 2.0
 MARGIN = 0.5
+ZOOM_FACTOR = 1.0  # Factor to zoom out the view
 
 
 # Data Structures =============================================================
@@ -45,7 +41,6 @@ class Node:
     sub_nodes: List['Node']
     is_entrance: bool
     key: Optional[str]
-    features: List[str]
     description: Optional[str] = None
     connections: int = 0
 
@@ -106,7 +101,6 @@ def simulate_dice_drops() -> List[Node]:
                 sub_nodes=[],
                 is_entrance=False,
                 key=None,
-                features=[]
             ))
     logger.debug(f"Generated {len(nodes)} nodes with dice counts: {dice_counts}")
     return nodes
@@ -117,13 +111,11 @@ def _process_nodes(nodes: List[Node]) -> List[Node]:
     entrance_set = False
     for i, node in enumerate(nodes, start=1):
         node.room_type = DICE_ROOM_TYPES[node.dice]
-        node.features = random.sample(ROOM_FEATURES, random.randint(0, 2))
         node.key = f"Room {i}"
         if node.dice == 'd4' and not entrance_set:
             node.is_entrance = True
             entrance_set = True
-        node.description = (f"A {node.room_type.lower()} with " +
-                            (", ".join(node.features) if node.features else "no notable features") + ".")
+        node.description = f"A {node.room_type.lower()}."
         logger.debug(f"{node.key}: {node.description}")
     return nodes
 
@@ -162,7 +154,7 @@ def create_loops_and_connect(nodes: List[Node]) -> Tuple[List[Edge], List[Dict[s
     nodes_by_dice = {d: [] for d in DICE_TYPES}
     for node in nodes:
         nodes_by_dice[node.dice].append(node)
-    # Create red and blue loops.
+    # Create red and blue loops
     for color in ['red', 'blue']:
         try:
             loop_nodes = [
@@ -183,7 +175,7 @@ def create_loops_and_connect(nodes: List[Node]) -> Tuple[List[Edge], List[Dict[s
             })
         except IndexError:
             logger.warning(f"Missing nodes for {color} loop")
-    # Connect free nodes.
+    # Connect free nodes
     used_ids = {nid for loop in loops for nid in loop['node_ids']}
     free_nodes = [n for n in nodes if n.id not in used_ids]
     for free in free_nodes:
@@ -192,7 +184,7 @@ def create_loops_and_connect(nodes: List[Node]) -> Tuple[List[Edge], List[Dict[s
             closest = min(candidates, key=lambda n: math.dist(free.position, n.position))
             if not any((free.id, closest.id) in {(e.start_id, e.end_id), (e.end_id, e.start_id)} for e in edges):
                 edges.append(Edge(free.id, closest.id))
-    # Detect intersections.
+    # Detect intersections
     for i in range(len(edges)):
         for j in range(i + 1, len(edges)):
             e1, e2 = edges[i], edges[j]
@@ -243,53 +235,81 @@ def connect_clusters(nodes: List[Node], edges: List[Edge]) -> List[Edge]:
 
 
 def save_graph_image(nodes: List[Dict], edges: List[Dict], loops: List[Dict],
-                     image_filename: str = "docs/dungeon_graph.png"):
-    """Visualize with paper-constrained layout."""
+                     image_filename: str = "docs/dungeon_graph.png", zoom_factor: float = ZOOM_FACTOR):
+    """Visualize with a centered, zoomed-out layout."""
     plt.figure(figsize=(GRID_WIDTH, GRID_HEIGHT), dpi=300)
     G = nx.Graph()
     pos = {}
     node_colors = []
+
+    # Create graph structure
     for node in nodes:
         label = node['key']
         G.add_node(label)
-        pos[label] = (
-            np.clip(node['position'][0], MARGIN, GRID_WIDTH - MARGIN),
-            np.clip(node['position'][1], MARGIN, GRID_HEIGHT - MARGIN)
-        )
+        pos[label] = node['position']
         if node['is_entrance']:
-            node_colors.append('#90EE90')
+            node_colors.append('#90EE90')  # Light green for entrance
         else:
-            in_red = any(node['id'] in loop['node_ids'] for loop in loops if 'red' in loop.values())
-            in_blue = any(node['id'] in loop['node_ids'] for loop in loops if 'blue' in loop.values())
+            # Determine node color based on loop membership
+            in_red = any(node['id'] in loop['node_ids'] for loop in loops if loop.get('color') == 'red')
+            in_blue = any(node['id'] in loop['node_ids'] for loop in loops if loop.get('color') == 'blue')
             if in_red and in_blue:
-                node_colors.append('#FFB6C1')
+                node_colors.append('#FFB6C1')  # Pink for overlap
             elif in_red:
-                node_colors.append('#FF9999')
+                node_colors.append('#FF9999')  # Red
             elif in_blue:
-                node_colors.append('#99CCFF')
+                node_colors.append('#99CCFF')  # Blue
             else:
-                node_colors.append('#F0F0F0')
+                node_colors.append('#F0F0F0')  # Gray for neutral
+
+    # Add edges to graph
     for edge in edges:
         start = next(n['key'] for n in nodes if n['id'] == edge['start_id'])
         end = next(n['key'] for n in nodes if n['id'] == edge['end_id'])
         G.add_edge(start, end)
-    nx.draw(G, pos, with_labels=True, node_size=250,
-            font_size=5, alpha=0.9, edge_color='#333333',
-            node_color=node_colors, linewidths=0.3)
-    plt.xlim(0, GRID_WIDTH)
-    plt.ylim(0, GRID_HEIGHT)
+
+    # Draw elements
+    nx.draw_networkx_nodes(
+        G, pos,
+        node_color=node_colors,
+        node_size=200,
+        edgecolors='black',
+        linewidths=0.5
+    )
+    nx.draw_networkx_edges(
+        G, pos,
+        edge_color='gray',
+        width=1,
+        alpha=0.7
+    )
+    nx.draw_networkx_labels(
+        G, pos,
+        font_size=6,
+        font_family='sans-serif'
+    )
+
+    # Set view parameters
+    x_coords = [p[0] for p in pos.values()]
+    y_coords = [p[1] for p in pos.values()]
+    x_center = (min(x_coords) + max(x_coords)) / 2
+    y_center = (min(y_coords) + max(y_coords)) / 2
+    width = (max(x_coords) - min(x_coords)) * zoom_factor
+    height = (max(y_coords) - min(y_coords)) * zoom_factor
+
+    plt.xlim(x_center - width / 2, x_center + width / 2)
+    plt.ylim(y_center - height / 2, y_center + height / 2)
     plt.title("Dungeon Map", fontsize=8)
+    plt.axis('off')
     plt.tight_layout(pad=0.3)
     plt.savefig(image_filename, bbox_inches='tight')
     plt.close()
 
 
 def _format_room_list(nodes: List[Dict]) -> str:
-    """Generate markdown list of rooms with details."""
+    """Generate Markdown list of rooms with sequential numbering."""
     return "\n".join(
-        f"- **{n['key']}**: {n['room_type']} (Features: {', '.join(n['features']) if n['features'] else 'None'}, "
-        f"Position: ({n['position'][0]:.1f}, {n['position'][1]:.1f}))"
-        for n in nodes
+        f"- **{n['key']}**: {n['room_type']}"  # Changed from n['id'] to n['key']
+        for n in sorted(nodes, key=lambda x: int(x['key'].split()[-1]))
     )
 
 
@@ -385,9 +405,7 @@ def generate_dungeon_map(*args, **kwargs) -> Dict[str, Any]:
 
         # Build detailed lists for output.
         room_list = _format_room_list(result['metadata']['nodes'])
-        # Use the dictionary-converted edges.
         connection_list = _format_connection_list(result['metadata']['edges'], nodes)
-        # Pass the dictionary-converted edges for junction formatting.
         junction_list = _format_junction_list(result['metadata']['junctions'], result['metadata']['edges'], nodes)
         loop_list = _format_loop_list(result['metadata']['loops'], nodes)
 

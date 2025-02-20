@@ -32,7 +32,7 @@ OLLAMA_PATHS = {
 }
 
 OLLAMA_URL = "http://localhost:11434/"
-API_TIMEOUT = 120  # Increase timeout for complex generations
+API_TIMEOUT = 240  # Increase timeout for complex generations
 STARTUP_TIMEOUT = 120
 MINIMUM_MODEL_COUNT = 1  # Fail if no models installed
 

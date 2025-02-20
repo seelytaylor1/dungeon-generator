@@ -7,8 +7,48 @@ import random
 from schema import Schema, And, Or, Optional, SchemaError
 from ollama_manager import initialize_service, get_installed_models
 from modules.doc_writer import merge_sections
+import argparse
 
-# Configure logging globally
+# Debug content configuration
+DEBUG_CONTENT = {
+    'history': {
+        'content': "Ancient tomb built by a forgotten civilization. Later occupied by bandits. Recently disturbed by treasure hunters.",
+        'metadata': {'source': 'debug'}
+    },
+    'faction': {
+        'content': "## Active Factions\n1. Bandit Clan: Wants to protect stolen goods\n2. Undead Spirits: Seek to punish raiders\n3. Archaeologists: Document the site",
+        'metadata': {'source': 'debug'}
+    },
+    'exterior': {
+        'content': "Crumbling stone entrance partially buried in sand. Animal tracks circle the area.",
+        'metadata': {'source': 'debug'}
+    },
+    'dungeon_content': {
+        'content': """## Dungeon Content
+### 13. GRAND HALL
+Stone dust in air. Faded murals. Cracked obsidian floor.
+• Central Pillar: Bear claw marks (DC 14 Strength)
+▶ Iron Brazier: Melted silver residue (22 gp)
+• Collapsed Archway: Leads downward
+
+### 7. RITUAL CHAMBER
+Charred bones smell. Bloodstained altar. Flickering shadows.
+• Sacrificial Knife: Blackened blade (15 gp)
+▶ Hidden Cache: Behind loose stone (DC 12 Perception)
+• Wall Inscriptions: Warning in dead language""",
+        'metadata': {'source': 'debug'}
+    }
+}
+
+# Configure argument parsing
+parser = argparse.ArgumentParser()
+parser.add_argument('-y', '--yes', action='store_true', help='Automatically select yes for all prompts')
+parser.add_argument('-n', '--no', action='store_true', help='Automatically select no for all prompts')
+parser.add_argument('-d', '--debug', action='store_true',
+                    help='Populate with debug content and skip all generation')
+args = parser.parse_args()
+
+# Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -38,14 +78,34 @@ config_schema = Schema({
 })
 
 
+def is_affirmative(response):
+    return response.strip().lower() in ['yes', 'y', 'debug']
+
+
+def get_input(prompt):
+    if args.debug:
+        print(f"{prompt} [debug mode auto-no]")
+        return 'debug'
+    if args.yes: return 'yes'
+    if args.no: return 'no'
+    return input(prompt).strip().lower()
+
+
 async def process_module(module_info, output_data, config):
+    # Only skip LLM-dependent modules
+    skip_modules = ['history', 'faction', 'exterior', 'dungeon_content']
+    if args.debug and module_info['name'] in skip_modules:
+        logging.info(f"⏩ Skipping {module_info['name']} in debug mode")
+        return
+
+    # Original process_module implementation
     module_name = module_info['name']
     function_name = module_info['function']
     default_model = config['models']['default']
     max_retries = module_info.get('retries', 1)
     timeout = module_info.get('timeout', 400)
 
-    # Check dependencies
+    # Dependencies check
     dependencies = module_info.get('depends_on', [])
     missing_deps = [dep for dep in dependencies if dep not in output_data]
     if missing_deps:
@@ -54,15 +114,19 @@ async def process_module(module_info, output_data, config):
 
     # Parameter resolution system
     param_resolvers = {
-        'model': lambda: module_info.get('model', default_model),
+        'model': lambda: module_info.get('model', config['models']['default']),
         'history_content': lambda: output_data.get('history', {}).get('content', ''),
-        'faction_content': lambda: "\n\n".join(
-            f["content"] for f in output_data.get('faction', {}).get('factions', [])
+        'history_metadata': lambda: output_data.get('history', {}).get('metadata'),
+        'faction_content': lambda: output_data.get('faction', {}).get('content', ''),
+        'world_context': lambda: (
+            f"Dungeon History:\n{output_data.get('history', {}).get('content', '')}\n\n"
+            f"Active Factions:\n{output_data.get('faction', {}).get('content', '')}"
         ),
         'exterior_content': lambda: output_data.get('exterior', {}).get('content', ''),
         'num_dice': lambda: module_info.get('num_dice', 11),
         'dice_rolls': lambda: [random.randint(1, 6) for _ in range(module_info.get('num_dice', 11))],
-        'existing_data': lambda: output_data
+        'existing_data': lambda: output_data,
+        'metadata': lambda: output_data.get('dungeon_map', {}).get('metadata') or {}
     }
 
     try:
@@ -84,7 +148,6 @@ async def process_module(module_info, output_data, config):
 
             logging.info(f"🚀 Processing {module_name} (attempt {attempt}/{max_retries})")
 
-            # Execute with timeout
             if asyncio.iscoroutinefunction(module_function):
                 result = await asyncio.wait_for(module_function(**params), timeout)
             else:
@@ -106,11 +169,8 @@ async def process_module(module_info, output_data, config):
                 await asyncio.sleep(1 * attempt)
 
 
-def is_affirmative(response):
-    return response.strip().lower() in ['yes', 'y']
-
-
 def build_config():
+    """Load and validate configuration from config.json."""
     try:
         with open("config.json") as f:
             config = json.load(f)
@@ -125,86 +185,103 @@ async def main():
     if not config:
         return
 
-    if not initialize_service():
-        logging.error("❌ Failed to initialize Ollama service. Exiting.")
-        return
-
     output_data = {}
 
-    # User input handling
-    generate_history = is_affirmative(input("📜 Generate history automatically? (yes/no): "))
-    generate_faction = is_affirmative(input("🤼 Generate factions automatically? (yes/no): "))
-    generate_exterior = is_affirmative(input("🌅 Generate exterior automatically? (yes/no): "))
+    if args.debug:
+        logging.info("🐛 DEBUG MODE ACTIVATED - USING DEFAULT CONTENT")
+        output_data.update({
+            'history': DEBUG_CONTENT['history'],
+            'faction': DEBUG_CONTENT['faction'],
+            'exterior': DEBUG_CONTENT['exterior']
+        })
+    else:
+        if not DEBUG_CONTENT['faction'].get('content'):
+            raise ValueError("Debug faction content missing required 'content' field")
 
-    # Manual input collection
-    if not generate_history:
-        output_data['history'] = {
-            'content': input("Enter dungeon history:\n"),
-            'metadata': {'source': 'manual'}
-        }
-    if not generate_faction:
-        output_data['faction'] = {
-            'factions': [{'content': input("Enter faction details:\n")}],
-            'metadata': {'source': 'manual'}
-        }
-    if not generate_exterior:
-        output_data['exterior'] = {
-            'content': input("Enter exterior description:\n"),
-            'metadata': {'source': 'manual'}
-        }
-
-    # Model initialization
-    models = config['models']
-    installed_models = get_installed_models()
-
-    if models['default'] not in installed_models:
-        if fallback := models.get('fallback'):
-            if fallback in installed_models:
-                logging.warning(f"⚠️ Using fallback model: {fallback}")
-                models['default'] = fallback
-            else:
-                logging.error("❌ No valid models available")
-                return
-        else:
-            logging.error("❌ Default model not available")
+        if not initialize_service():
+            logging.error("❌ Failed to initialize Ollama service. Exiting.")
             return
 
-    # Module filtering
-    filtered_modules = [
-        mod for mod in config['modules']
-        if not (
-                (mod['name'] == 'history' and not generate_history) or
-                (mod['name'] == 'faction' and not generate_faction) or
-                (mod['name'] == 'exterior' and not generate_exterior)
-        )
-    ]
+        debug_choice = get_input("📜 Generate content automatically? (yes/no/debug): ")
+        if debug_choice == 'debug':
+            args.debug = True
+            return await main()
 
-    # Process modules
-    independent = []
-    dependent = []
-    for module in sorted(filtered_modules, key=lambda x: x['priority']):
-        if module.get('depends_on'):
-            dependent.append(module)
-        else:
-            independent.append(module)
+        generate_history = args.yes or (not args.no and is_affirmative(debug_choice))
+        generate_faction = args.yes or (not args.no and is_affirmative(debug_choice))
+        generate_exterior = args.yes or (not args.no and is_affirmative(debug_choice))
 
-    # Parallel processing for independent modules
-    await asyncio.gather(*[
-        process_module(mod, output_data, config)
-        for mod in independent
-    ])
+        if not generate_history:
+            output_data['history'] = {
+                'content': input("Enter dungeon history:\n"),
+                'metadata': {'source': 'manual'}
+            }
+        if not generate_faction:
+            output_data['faction'] = {
+                'factions': [{'content': input("Enter faction details:\n")}],
+                'metadata': {'source': 'manual'}
+            }
+        if not generate_exterior:
+            output_data['exterior'] = {
+                'content': input("Enter exterior description:\n"),
+                'metadata': {'source': 'manual'}
+            }
 
-    # Sequential processing for dependent modules
-    for mod in dependent:
-        await process_module(mod, output_data, config)
+    if not args.debug:
+        # Model initialization
+        models = config['models']
+        installed_models = get_installed_models()
 
-    # Merge individual section markdown files into final documentation.
-    merge_sections(final_filename="documentation.md",
-                   order=("history", "faction", "exterior", "dungeon_map"))
+        if models['default'] not in installed_models:
+            if fallback := models.get('fallback'):
+                if fallback in installed_models:
+                    logging.warning(f"⚠️ Using fallback model: {fallback}")
+                    models['default'] = fallback
+                else:
+                    logging.error("❌ No valid models available")
+                    return
+            else:
+                logging.error("❌ Default model not available")
+                return
 
-    # Optional: If any errors occurred, you could choose to not merge or flag the final document.
-    if 'error' in output_data:
+        # Module processing
+        filtered_modules = [
+            mod for mod in config['modules']
+            if not (
+                    (mod['name'] == 'history' and not generate_history) or
+                    (mod['name'] == 'faction' and not generate_faction) or
+                    (mod['name'] == 'exterior' and not generate_exterior)
+            )
+        ]
+
+        independent = []
+        dependent = []
+        for module in sorted(filtered_modules, key=lambda x: x['priority']):
+            if module.get('depends_on'):
+                dependent.append(module)
+            else:
+                independent.append(module)
+
+        await asyncio.gather(*[
+            process_module(mod, output_data, config)
+            for mod in independent
+        ])
+
+        for mod in dependent:
+            await process_module(mod, output_data, config)
+
+    # Always merge sections
+    merge_sections(
+        final_filename="documentation.md",
+        order=("history", "faction", "exterior", "dungeon_map", "dungeon_content"),
+        debug_content=DEBUG_CONTENT if args.debug else None
+    )
+
+    if args.debug:
+        logging.info("🛠 DEBUG OUTPUT COMPLETE - GENERATED WITH DEFAULT CONTENT")
+    elif 'error' in output_data:
         logging.error("⛔ Some modules encountered errors. Please check the logs.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

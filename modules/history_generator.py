@@ -12,7 +12,6 @@ from modules.prompts import (
 )
 from modules.name_generator import generate_random_name
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -120,4 +119,5 @@ def _build_metadata(builder_info: Dict[str, str], components: Dict[str, str]) ->
         "original_purpose": f"{components['modifier']} {components['purpose']}",
         "ruin_cause": components["ruin"],
         "current_state": components["present"],
+        "present_name": builder_info.get("present_name", "Unknown")  # Add present faction name
     }
