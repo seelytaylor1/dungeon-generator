@@ -1,8 +1,14 @@
 # Dungeon Generator
+
+![Uploading gentle-seal-of-approval.png…]()
+
 ## Overview
+
 This project is a procedural dungeon generator designed for Shadowdark RPG. 
 
 It leverages a combo of AI-driven prompts and random inputs to generate a dungeon.
+
+![readme-screenshot](https://github.com/user-attachments/assets/f3bdf627-71aa-4c97-b0fc-48585680f3f3)
 
 ## Features
 - AI-driven ancient history generation.
@@ -18,6 +24,8 @@ pip install -r requirements.txt
 In addition, you'll need Ollama and a local model. The script currently 
 implements [openthinker:7b](https://ollama.com/library/openthinker), an uncensored distillation of deepseek-r1, as 
 the primary model. 
+
+![image](https://github.com/user-attachments/assets/322632f4-f76d-47cb-b57d-2ea48266dff5)
 
 ## Usage
 Run the generator with:
