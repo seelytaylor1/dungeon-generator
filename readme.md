@@ -30,8 +30,8 @@ Specify `debug` if you want to skip the first three steps of generation.
 
 ## Known Issues & Debugging
 - Hardcoded models, temperature, and context window.
-- No error handling for user input.
-- 
+- Somewhat questionable room content outputs.
+
 
 ## Future Enhancements
 - Implement loops
