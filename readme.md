@@ -37,18 +37,22 @@ Specify `no` if you have some ideas about the dungeon you want to generate.
 Specify `debug` if you want to skip the first three steps of generation.
 
 ## Known Issues & Debugging
+- Dungeon Content not being written to final doc.
+- Final doc has formatting problems.
+- Sometimes, the dungeon map adds nodes outside the view.
 - Hardcoded models, temperature, and context window.
 - Somewhat questionable room content outputs.
 
 
 ## Future Enhancements
-- Implement loops
-- Generate random encounter tables
+- Fix Known issues.
+- Implement loops.
+- Generate random encounter tables.
 - Further refine AI prompts for better room outputs.
 
 ## Contributing
-Pull requests are welcome! Not looking for bug reports, I got enough problems ;)
+Pull requests are welcome! Not looking for bug reports; I got enough problems ;)
 
 ## License
-All rights reserved, for now.
+All rights reserved for now.
 
