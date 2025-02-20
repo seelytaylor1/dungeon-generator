@@ -36,7 +36,7 @@ Specify `debug` if you want to skip the first three steps of generation.
 ## Future Enhancements
 - Implement loops
 - Generate random encounter tables
-- Further refine AI prompts for better room outputs.
+- Refine AI prompts for better room outputs.
 
 ## Contributing
 Pull requests are welcome! Not looking for bug reports, I got enough problems ;)

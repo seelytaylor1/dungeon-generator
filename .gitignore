@@ -29,6 +29,7 @@ bin/
 .DS_Store
 
 ### Outputs ###
-dungeon_documentation.md
+documentation.md
 dungeon_graph.png
 docs/
+backup/
