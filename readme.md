@@ -1,6 +1,6 @@
 # Dungeon Generator
 
-![Uploading gentle-seal-of-approval.png…]()
+![seal-small](https://github.com/user-attachments/assets/1603836e-e803-4e58-9989-57ae92ff1522)
 
 ## Overview
 
