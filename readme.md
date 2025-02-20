@@ -16,12 +16,12 @@ It leverages a combo of AI-driven prompts and random inputs to generate a dungeo
 - Procedurally created concept map of the dungeon.
 - AI-driven room descriptions. 
 
-## Installation
+## Requirements
 Ensure you have Python 3 installed along with the required dependencies.
 ```bash
 pip install -r requirements.txt
 ```
-In addition, you'll need Ollama and a local model. The script currently 
+In addition, you'll need [Ollama](https://ollama.com) and a local model installed. The script currently 
 implements [openthinker:7b](https://ollama.com/library/openthinker), an uncensored distillation of deepseek-r1, as 
 the primary model. 
 
