@@ -14,13 +14,13 @@ def get_combined_history_prompt(history_components, builder_info):
     return {
         "key": "CombinedHistory",
         "prompt": (
-            f"You are a master storyteller specializing in low-fantasy, sword-and-sandals fiction."
-            f"You're going to write lore for a location that will be used in a tabletop roleplaying game."
-            f"Dungeon ancient builders: {builder_info['creature_type']} known as {builder_name_with_demonym}.for "
-            f"Dungeon builders motivation: {builder_info['impulse']}. "
+            f"You are a master storyteller specializing in low-fantasy, sword-and-sandals fiction. "
+            f"You're going to write lore for a location that will be used in a tabletop roleplaying game.\n\n"
+            f"Dungeon ancient builders: {builder_info['creature_type']} known as {builder_name_with_demonym}.\n\n"
+            f"Dungeon builders motivation: {builder_info['impulse']}.\n\n"
             f"Dungeon's ancient purpose: {history_components['modifier']} {history_components['purpose']}.\n\n"
             f"Builders ancient culture fell to ruin because: {history_components['ruin']}.\n\n"
-            f"Present occupants are: {builder_info['present_name']}."
+            f"Present occupants are: {builder_info['present_name']}.\n\n"
             f"Present occupants use the dungeon as: {history_components['present']}.\n\n"
             "Using these details, write three paragraphs detailing the history from the ancient builders to the "
             "present day."
@@ -35,24 +35,24 @@ def get_combined_history_prompt(history_components, builder_info):
 # Template for generating a detailed description for the present-day faction.
 FACTION_PRESENT_DAY_PROMPT = """Create detailed description for current dungeon occupants: {name}
 
-Historical Context:
+Historical Context:\n
 {history}
 
 Key Attributes:
-- Original Builders: {builders}
-- Original Purpose: {original_purpose}
-- Current Purpose: {current_state}
-- Previous Collapse: {ruin_cause}
+- Original Builders: {builders}\n
+- Original Purpose: {original_purpose}\n
+- Current Purpose: {current_state}\n
+- Previous Collapse: {ruin_cause}\n
 
 Include sections:
-## Faction Description
-[one paragraph]
-## Faction Members
-[one paragraph]
-## Faction Leader/Goal
-[one paragraph]
-## Faction Challenges
-[one paragraph]
+## Faction Description\n
+[one paragraph]\n
+## Faction Members\n
+[one paragraph]\n
+## Faction Leader/Goal\n
+[one paragraph]\n
+## Faction Challenges\n
+[one paragraph]\n
 """
 
 # Template for generating a background faction.

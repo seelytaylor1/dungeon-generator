@@ -6,7 +6,7 @@ import re
 from typing import Dict, List, Any
 
 from modules.tables import EXPERIENCE_TABLES, ENCOUNTER_TABLES
-from utils.ollama_manager import generate_with_retry
+from ollama_manager import generate_with_retry
 from modules.prompts import get_prompt, PROMPT_TEMPLATES
 
 logger = logging.getLogger(__name__)

@@ -54,7 +54,9 @@
     }
   ],
   "output": {
-    "file": "dungeon_documentation.md",
-    "sanitize": true
+    "file": "dungeon.md",
+    "sanitize": true,
+    "merge_order": ["history", "faction", "exterior", "dungeon_map", "dungeon_content"]
   }
+
 }

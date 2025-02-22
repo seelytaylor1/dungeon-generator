@@ -4,8 +4,8 @@ import re
 from datetime import datetime
 from typing import Dict, Any
 from modules import tables
-from modules.doc_writer import write_section
-from ollama_manager import generate_with_retry
+from utils.doc_writer import DocumentationBuilder
+from utils.ollama_manager import generate_with_retry
 from modules.prompts import EXTERIOR_PROMPTS
 
 logger = logging.getLogger(__name__)
@@ -46,9 +46,9 @@ def generate_exterior(model: str, history_content: str, faction_content: str) ->
                 "generated_at": datetime.now().isoformat()
             }
         }
-
+        doc_builder = DocumentationBuilder()
         # Write the complete exterior description to the markdown section
-        write_section("exterior", result["content"])
+        doc_builder.write_section("exterior", result["content"])
         logger.info("✅ Exterior generation complete!")
         return result
 

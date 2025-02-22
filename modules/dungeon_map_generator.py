@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, asdict
-from modules.doc_writer import write_section
+from utils.doc_writer import write_section
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")

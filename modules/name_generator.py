@@ -11,6 +11,7 @@ def generate_random_name():
       4. The Y of Z
       5. The X of Z
       6. W the Y of Z
+      7. XY (Noun)(Verbs)
 
     Where:
       - W is a syllable.
@@ -24,8 +25,8 @@ def generate_random_name():
     nouns = random_data.get("nouns", [])
     verbs = random_data.get("verbs", [])
 
-    # Choose one of the six formats at random.
-    format_choice = random.choice([1, 2, 3, 4, 5, 6])
+    # Choose one of the seven formats at random.
+    format_choice = random.choice([1, 2, 3, 4, 5, 6, 7])
 
     def make_w(n):
         """Generate a word composed of n syllables, capitalizing the first letter."""
@@ -56,6 +57,11 @@ def generate_random_name():
         noun = random.choice(nouns)
         z = make_w(random.choice([1, 2, 3]))
         name = f"{w} the {noun} of {z}"
+    elif format_choice == 7:
+        # Format 7: XY (Noun)(Verbs)
+        noun = random.choice(nouns)
+        verb = random.choice(verbs)
+        name = f"{noun}{verb} {random.choice(nouns)}"
 
     return name
 
