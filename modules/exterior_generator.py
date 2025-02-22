@@ -1,3 +1,4 @@
+# exterior_generator.py
 import random
 import logging
 import re
@@ -11,65 +12,26 @@ from modules.prompts import EXTERIOR_PROMPTS
 logger = logging.getLogger(__name__)
 
 
-def extract_solution(text: str) -> str:
-    """
-    Extracts and returns the text between <|begin_of_solution|> and <|end_of_solution|>.
-    If these markers are not present, returns the entire text.
-    """
-    match = re.search(r'<\|begin_of_solution\|>(.*?)<\|end_of_solution\|>', text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return text.strip()
+def extract_sections(text: str) -> Dict[str, str]:
+    """Extracts sections based on Markdown headers from LLM response."""
+    sections = {}
+    current_section = None
+    section_content = []
 
+    for line in text.split('\n'):
+        header_match = re.match(r'^##\s+(.+)$', line.strip())
+        if header_match:
+            if current_section:
+                sections[current_section] = '\n'.join(section_content).strip()
+            current_section = header_match.group(1)
+            section_content = []
+        elif current_section:
+            section_content.append(line.strip())
 
-def generate_exterior(model: str, history_content: str, faction_content: str) -> Dict[str, Any]:
-    """Generate dungeon exterior with integrated validation."""
-    try:
-        logger.info("🌅 Starting exterior generation...")
+    if current_section:
+        sections[current_section] = '\n'.join(section_content).strip()
 
-        # Validate required exterior tables exist
-        _validate_exterior_tables()
-
-        # Create exterior components (e.g., environment, path, landmark, etc.)
-        components = _create_components(history_content, faction_content)
-
-        # Generate detailed descriptions for each component using the LLM
-        descriptions = _generate_component_descriptions(model, components, history_content)
-
-        # Build result content by joining each component's section with headers
-        result = {
-            "content": "\n\n".join([
-                f"## {name}\n{desc}" for name, desc in descriptions.items()
-            ]),
-            "metadata": {
-                "components": {k: v[1] for k, v in components.items()},
-                "generated_at": datetime.now().isoformat()
-            }
-        }
-        doc_builder = DocumentationBuilder()
-        # Write the complete exterior description to the markdown section
-        doc_builder.write_section("exterior", result["content"])
-        logger.info("✅ Exterior generation complete!")
-        return result
-
-    except Exception as e:
-        logger.error(f"Exterior generation failed: {str(e)}")
-        return {"error": str(e)}
-
-
-def _build_component_prompt(component_name: str, component_value: str, history: str,
-                            environment_context: str = "") -> str:
-    """Construct prompts using centralized templates."""
-    try:
-        template = EXTERIOR_PROMPTS[component_name]
-        return template.format(
-            component_value=component_value,
-            history=history,
-            environment_context=environment_context
-        )
-    except KeyError:
-        logger.warning(f"No template found for {component_name}")
-        return f"Describe {component_name} with: {component_value} (History: {history})"
+    return sections
 
 
 def _validate_exterior_tables() -> None:
@@ -122,47 +84,53 @@ def _create_components(history: str, factions: str) -> Dict[str, tuple]:
     return components
 
 
-def _generate_component_descriptions(model: str, components: Dict[str, tuple], history: str) -> Dict[str, str]:
-    """Generate descriptions for each exterior component using the LLM service."""
-    descriptions = {}
+def generate_exterior(model: str, history_content: str, faction_content: str) -> Dict[str, Any]:
+    """Generate dungeon exterior with single LLM call."""
+    try:
+        logger.info("🌅 Starting exterior generation...")
+        _validate_exterior_tables()
+        components = _create_components(history_content, faction_content)
 
-    # Generate environment first
-    env_prompt = _build_component_prompt("Environment", components["environment"][1], history)
-    env_response = generate_with_retry(
-        prompt=env_prompt,
-        model=model,
-        temperature=0.85,
-        top_p=0.9
-    )
+        # Build consolidated prompt
+        prompt = EXTERIOR_PROMPTS["CONSOLIDATED"].format(
+            components={k: v[1] for k, v in components.items()},
+            history=history_content,
+            factions=faction_content
+        )
 
-    if not env_response or not env_response.get("response"):
-        raise ValueError("Empty response for Environment")
+        # Single LLM call
+        response = generate_with_retry(
+            prompt=prompt,
+            model=model,
+            temperature=0.8,
+            top_p=0.85
+        )
 
-    environment_description = extract_solution(env_response["response"])
-    descriptions["Environment"] = environment_description
-    logger.info("Generated Environment description")
+        if not response or not response.get("response"):
+            raise ValueError("Empty response from LLM")
 
-    # Generate remaining components with environment context
-    for key, (name, value) in components.items():
-        if name == "Environment":
-            continue  # Skip, already processed
+        # Parse sections from response
+        descriptions = extract_sections(response["response"])
+        required_sections = ["Environment", "Path", "Landmark", "Secondary Entrance", "Antechamber"]
 
-        try:
-            prompt = _build_component_prompt(name, value, history, environment_description)
-            response = generate_with_retry(
-                prompt=prompt,
-                model=model,
-                temperature=0.85,
-                top_p=0.9
-            )
-            if not response or not response.get("response"):
-                raise ValueError(f"Empty response for {name}")
+        # Validate all sections present
+        for section in required_sections:
+            if section not in descriptions:
+                raise ValueError(f"Missing section in response: {section}")
 
-            descriptions[name] = extract_solution(response["response"])
-            logger.info(f"Generated {name} description")
+        result = {
+            "content": "\n\n".join([f"## {k}\n{v}" for k, v in descriptions.items()]),
+            "metadata": {
+                "components": {k: v[1] for k, v in components.items()},
+                "generated_at": datetime.now().isoformat()
+            }
+        }
 
-        except Exception as e:
-            logger.warning(f"Failed to generate {name}: {str(e)}")
-            descriptions[name] = f"{name} description unavailable"
+        doc_builder = DocumentationBuilder()
+        doc_builder.write_section("exterior", result["content"])
+        logger.info("✅ Exterior generation complete!")
+        return result
 
-    return descriptions
+    except Exception as e:
+        logger.error(f"Exterior generation failed: {str(e)}")
+        return {"error": str(e)}

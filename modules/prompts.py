@@ -72,36 +72,37 @@ Add one paragraph under these required headings:
 
 # Exterior prompts
 EXTERIOR_PROMPTS = {
-    "Environment": """
-Describe the physical surroundings of a low-fantasy, sword-and-sandals dungeon using this 
-physical detail: {component_value}.
-Focus on the visible terrain, weather, vegetation, and atmosphere.
-Exclude historical backstory or faction information.
-Limit your output to one paragraph. Begin:
-""",
-    "Path": """
-Detail the path leading to the low-fantasy, sword-and-sandals dungeon, characterized by: "{component_value}".
-Emphasize its physical condition, terrain, weather, vegetation (if any), and any natural or man-made obstacles.
-Avoid historical or faction details.
-Limit your output to one paragraph. Begin:
-""",
-    "Landmark": """
-Describe a prominent landmark near the low-fantasy, sword-and-sandals dungeon using this detail: {component_value}.
-Focus on its visual and physical characteristics—its shape, texture, and surroundings—and explain what makes it 
-stand out.
-Limit your output to one paragraph. Begin
-""",
-    "Secondary Entrance": """
-Describe a secondary entrance to the low-fantasy, sword-and-sandals dungeon defined by: {component_value}.
-Highlight its any observable features.
-Exclude any historical or faction-related information.
-Limit your output to one paragraph.
-""",
-    "Antechamber": """
-Describe the exterior aspect of the low-fantasy, sword-and-sandals dungeon's antechamber using the following feature: {component_value}.
-Concentrate on tangible details and describe the pathway into the dungeon proper.
-Avoid including historical narratives or faction details.
-Limit your output to one paragraph.
+    "CONSOLIDATED": """
+Generate a complete low-fantasy sword-and-sandals dungeon exterior description using these components:
+{components}
+
+Historical context: {history}
+Faction influences: {factions}
+
+Format your response with these Markdown sections:
+## Environment
+Describe the physical surroundings using: {components[environment]}
+Focus on terrain, weather, vegetation, and atmosphere.
+
+## Path
+Detail the approach path using: {components[path]}
+Include its condition, obstacles, and notable features.
+
+## Landmark
+Describe the prominent landmark using: {components[landmark]}
+Highlight its visual characteristics and surroundings.
+
+## Secondary Entrance
+Detail the alternative entrance using: {components[secondary_entrance]}
+Focus on its hidden features and access challenges.
+
+## Antechamber
+Describe the exterior aspects of the entrance chamber using: {components[antechamber]}
+Include any defensive features or symbolic elements.
+
+Maintain consistent tone and physical descriptions throughout.
+Avoid historical narratives or faction details unless directly visible.
+Use concise, evocative language suitable for a game master.
 """
 }
 
