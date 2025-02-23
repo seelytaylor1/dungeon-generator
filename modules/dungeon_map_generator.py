@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, asdict
-from utils.doc_writer import write_section
+from utils.doc_writer import DocumentationBuilder
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
@@ -433,9 +433,9 @@ def generate_dungeon_map(*args, **kwargs) -> Dict[str, Any]:
             "## Map Visualization\n\n"
             "![Dungeon Map](./dungeon_graph.png)"
         )
-
+        doc_builder = DocumentationBuilder()
         # Write detailed dungeon map content to dungeon_map.md.
-        write_section("dungeon_map", dungeon_map_content)
+        doc_builder.write_section("dungeon_map", dungeon_map_content)
         result["content"] = dungeon_map_content
 
         # Save the dungeon map image.

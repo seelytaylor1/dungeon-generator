@@ -1,3 +1,4 @@
+# prompts.py
 import random
 from typing import Dict, Any
 import logging
@@ -72,6 +73,33 @@ Add one paragraph under these required headings:
 
 # Exterior prompts
 EXTERIOR_PROMPTS = {
+    "main": """Based on this history:
+{history_content}
+
+And this faction information:
+{faction_content}
+
+Generate a complete low-fantasy sword-and-sandals dungeon exterior description.
+
+Format your response with these Markdown sections:
+## Environment
+Describe the physical surroundings, terrain, weather, vegetation, and atmosphere.
+
+## Path
+Detail the approach path, its condition, obstacles, and notable features.
+
+## Landmark
+Describe any prominent landmarks and their visual characteristics.
+
+## Main Entrance
+Detail the primary entrance and its notable features.
+
+## Secondary Entrance
+Detail any alternative entrances, focusing on hidden features and access points.
+
+Keep descriptions focused on physical appearance and current state.
+Use evocative language suitable for a game master.
+""",
     "CONSOLIDATED": """
 Generate a complete low-fantasy sword-and-sandals dungeon exterior description using these components:
 {components}
@@ -85,20 +113,20 @@ Describe the physical surroundings using: {components[environment]}
 Focus on terrain, weather, vegetation, and atmosphere.
 
 ## Path
-Detail the approach path using: {components[path]}
-Include its condition, obstacles, and notable features.
+Detail the approach path that contains this obstacle: {components[path]}
+Include its condition, describe the obstacle, and notable features.
 
 ## Landmark
-Describe the prominent landmark using: {components[landmark]}
-Highlight its visual characteristics and surroundings.
-
-## Secondary Entrance
-Detail the alternative entrance using: {components[secondary_entrance]}
-Focus on its hidden features and access challenges.
+Describe any prominent landmarks using this sense: {components[landmark]}
+Highlight its characteristics and purpose.
 
 ## Antechamber
 Describe the exterior aspects of the entrance chamber using: {components[antechamber]}
 Include any defensive features or symbolic elements.
+
+## Secondary Entrance
+Detail the alternative entrance to the dungeonusing: {components[secondary_entrance]}
+Focus on its hidden features and access challenges.
 
 Maintain consistent tone and physical descriptions throughout.
 Avoid historical narratives or faction details unless directly visible.
@@ -111,19 +139,19 @@ PROMPT_TEMPLATES = {
     "history_summary": (
         "You are an expert gamemaster and game designer. "
         "The following is the context for the dungeon's history:\n"
-        "{history_content}\n"
+        "{history}\n"
         "Summarize the history in bullet points. Focus on key events and factions.\n"
     ),
     "faction_summary": (
         "You are an expert gamemaster and game designer. "
         "The following is the context for the dungeon's history:\n"
-        "{faction_content}\n"
+        "{factions}\n"
         "Summarize the history in bullet points. Focus on key events and factions.\n"
     ),
     "room_description": (
         "You are an expert gamemaster and game designer. \n"
         "The following is context for the dungeon and factions:\n"
-        "Dungeon History Summary: {history_content}\n"
+        "Dungeon History Summary: {history_summary}\n"
         "Active Factions Summary: {faction_summary}\n\n"
         "Generate low-fantasy sword-and-sandals RPG room content. "
         "Content must focus on this encounter type: {encounter_type} ({encounter_desc})\n"
@@ -153,19 +181,19 @@ PROMPT_TEMPLATES = {
     ),
     "room_quality_control": (
         "Transform this content to match STRICT FORMAT:\n"
-        "1. First line = 3 sensory details\n"
+        "1. First line = 3 sensory details related to the contents of the room.\n"
         "2. Content must focus on this encounter type: {encounter_type} ({encounter_desc})\n"
         "3. The content must contain this experience: {experience_type} ({experience_desc})\n"
         "4. Add creature names and tactics where needed\n"
-        "5. Ensure EXACT gp values\n\n"
+        "5. Ensure EXACT gp values (0-25gp for small finds, 25-100gp for medium finds, 200-500gp for large finds)\n\n"
         "EXAMPLE CONVERSION:\n"
         "Before: A room with jars that might explode\n"
         "After:\n"
         "15. JAR STORAGE\n"
-        "Terracotta clusters. Sulfuric smell. Jagged door.\n"
+        "Terracotta clusters. Sulfuric smell. Blastmarked door.\n"
         "• Jars: 20 sealed vessels (black mush inside)\n"
         "▶ Explosive: DC 12 DEX save (1d4 damage)\n"
-        "▶ Treasure: 1:20 chance of cockatrice egg inside instead (40 gp)\n\n"
+        "▶ Treasure: One random jar contains a cockatrice egg (40 gp)\n\n"
         "Original Content:\n{original_content}\n\n"
         "Revised Version:"
     )
@@ -178,7 +206,7 @@ def get_prompt(template_name: str, context: Dict[str, Any]) -> str:
         "room_description": [
             "room_number", "room_type", "experience_type",
             "experience_desc", "encounter_type", "encounter_desc",
-            "max_features", "history_content", "faction_summary"
+            "max_features", "history", "faction_summary"
         ],
         "room_quality_control": [
             "original_content", "max_features",

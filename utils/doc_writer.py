@@ -106,7 +106,3 @@ class DocumentationBuilder:
 
         logging.warning(f"Missing content for section: {section_name}")
         return "*Section content missing*"
-
-# Example usage:
-# builder = DocumentationBuilder()
-# builder.merge_sections(debug_content=DEBUG_CONTENT)

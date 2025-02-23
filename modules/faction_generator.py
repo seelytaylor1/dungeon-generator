@@ -1,3 +1,4 @@
+#faction generator.py
 import logging
 import random
 import re
