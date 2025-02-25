@@ -54,9 +54,27 @@
     }
   ],
   "output": {
+    "directory": "docs",
     "file": "dungeon.md",
     "sanitize": true,
-    "merge_order": ["history", "factions", "exterior", "dungeon_map", "dungeon_content"]
+    "merge_order": ["history", "factions", "exterior", "dungeon_map", "dungeon_content"],
+    "section_config": {
+      "dungeon_content": {
+        "title": "Dungeon Content",
+        "required": true
+      },
+      "history": {
+        "title": "History"
+      },
+      "factions": {
+        "title": "Factions"
+      },
+      "exterior": {
+        "title": "Exterior"
+      },
+      "dungeon_map": {
+        "title": "Dungeon Map"
+      }
+    }
   }
-
 }

@@ -139,63 +139,73 @@ PROMPT_TEMPLATES = {
     "history_summary": (
         "You are an expert gamemaster and game designer. "
         "The following is the context for the dungeon's history:\n"
-        "{history}\n"
+        "{history_content}\n"
         "Summarize the history in bullet points. Focus on key events and factions.\n"
+
     ),
     "faction_summary": (
         "You are an expert gamemaster and game designer. "
-        "The following is the context for the dungeon's history:\n"
-        "{factions}\n"
-        "Summarize the history in bullet points. Focus on key events and factions.\n"
+        "The following is the context for the dungeon's factions:\n"
+        "{faction_content}\n"
+        "Summarize the faction information in bullet points. Focus on key groups and their motivations.\n"
+
     ),
     "room_description": (
-        "You are an expert gamemaster and game designer. \n"
-        "The following is context for the dungeon and factions:\n"
-        "Dungeon History Summary: {history_summary}\n"
-        "Active Factions Summary: {faction_summary}\n\n"
-        "Generate low-fantasy sword-and-sandals RPG room content. "
-        "Content must focus on this encounter type: {encounter_type} ({encounter_desc})\n"
-        "The content must contain this experience: {experience_type} ({experience_desc})\n"
-        "Use this EXACT structure for your output:\n"
-        "[NUMBER]. [LOCATION NAME IN CAPS]\n"
-        "[Sensory Detail 1] [Sensory Detail 2] [Sensory Detail 3]\n"
-        "• [Key Feature 1]: [Description] \n"
-        "▶ [Detail 1]: [Detail on inspection/effects of interaction] ([Mechanics/DC/gp value])\n"
-        "• [Optional: Key Feature 2]: [Description] ([Mechanics/DC/gp value])"
-        "▶ [OptionaL: Interaction 2]: [Detail on inspection/effects of interaction] ([Mechanics/DC/gp value])"
-        "• [Optional: Key Feature 3]: [Description] ([Mechanics/DC/gp value])"
-        "▶ [OptionaL: Interaction 2]: [Detail on inspection/effects of interaction] ([Mechanics/DC/gp value])"
-        "HARD REQUIREMENTS:\n"
-        "1. First line MUST be 3 sensory details separated by periods. They should relate to the contents of the room.\n"
-        "2. • bullets for key features/objects/NPCs/traps that address the {encounter_type} \n"
-        "3. ▶ arrows for interactions with () values\n"
-        "6. NO markdown, ONLY plain text\n\n"
-        "EXAMPLE OUTPUT:\n"
-        "17. STATUE ROOM\n"
-        "Bronze fragments of bull statue. Sulfuric air. Cracked wall.\n"
-        "• Carvings. Scenes of acrobats leaping over charging bulls and warriors fighting in ritualistic combat.\n"
-        "• Bull Statue: Exploded by some violent force.\n"
-        "• Body: Young man in splintered armor\n"
-        "▶ Backpack: Silver locket with portrait (5 gp)\n\n"
+        "You are a master of low-fantasy dungeon design for tabletop RPGs.\n\n"
+        "CRITICAL INSTRUCTIONS:\n"
+        "1. Magic is RARE, MYSTERIOUS, and TERRIFYING. If anything magical appears (limit to one element if any), treat it as dangerous and unknown.\n"
+        "2. CREATE A ROOM THAT FOCUSES EXCLUSIVELY ON THIS ENCOUNTER: {encounter_type} ({encounter_desc})\n"
+        "3. ADD THIS EXPERIENCE AS A TWIST: {experience_type} ({experience_desc})\n"
+        "4. Include EVOCATIVE MUNDANE DETAILS that connect to the dungeon's history and factions\n\n"
+        
+        "Dungeon Context:\n"
+        "- History: {history_summary}\n"
+        "- Factions: {faction_summary}\n\n"
+        
+        "FOLLOW THIS EXACT FORMAT:\n"
+        "{room_number}. ROOM NAME\n"
+        "[One paragraph room description with evocative mundane details. No bullet points here.]\n\n"
+        "• [Feature]: [Brief description]\n"
+        "▶ [Detail]: [What happens upon inspection or interaction]\n"
+        "▷ [Sub-detail]: [Additional consequence, if applicable]\n\n"
+        
+        "EXAMPLE:\n"
+        "7. BURIAL HALL\n"
+        "A burial hall full of alcoves. A stone coffin lies in each alcove. The lids are carved with life-sized warriors in helms and chainmail, arms crossed over their chests.\n\n"
+        "• Coffins: Six total. The heavy lids pull off with a puff of dust.\n"
+        "▶ Inside: A grinning skeleton in chainmail holding a greataxe and a shield. A gold coin covers each eye socket.\n"
+        "▷ Coins: Removing coins animates skeleton. Returning coins puts it back to rest.\n"
+        "• Secret Door: A hidden panel in the back of the northern alcove slides open.\n\n"
+        
         "Now create {room_number} ({room_type}):"
     ),
     "room_quality_control": (
-        "Transform this content to match STRICT FORMAT:\n"
-        "1. First line = 3 sensory details related to the contents of the room.\n"
-        "2. Content must focus on this encounter type: {encounter_type} ({encounter_desc})\n"
-        "3. The content must contain this experience: {experience_type} ({experience_desc})\n"
-        "4. Add creature names and tactics where needed\n"
-        "5. Ensure EXACT gp values (0-25gp for small finds, 25-100gp for medium finds, 200-500gp for large finds)\n\n"
-        "EXAMPLE CONVERSION:\n"
-        "Before: A room with jars that might explode\n"
-        "After:\n"
-        "15. JAR STORAGE\n"
-        "Terracotta clusters. Sulfuric smell. Blastmarked door.\n"
-        "• Jars: 20 sealed vessels (black mush inside)\n"
-        "▶ Explosive: DC 12 DEX save (1d4 damage)\n"
-        "▶ Treasure: One random jar contains a cockatrice egg (40 gp)\n\n"
+        "You are a strict editor enforcing low-fantasy dungeon design standards.\n\n"
+        "REVIEW AND FIX THE FOLLOWING ROOM TO ENSURE:\n"
+        "1. FOCUS SOLELY on this encounter: {encounter_type} ({encounter_desc})\n"
+        "2. Include this experience as a twist: {experience_type} ({experience_desc})\n"
+        "3. LOW FANTASY ONLY - magic must be rare or absent entirely. At most ONE magical element, treated as dangerous.\n"
+        "4. EVOCATIVE MUNDANE DETAILS that connect to {history_content} and {faction_content}\n"
+        "5. EXACT FORMAT:\n\n"
+        
+        "{room_number}. ROOM NAME\n"
+        "[One paragraph room description with evocative mundane details]\n\n"
+        "• [Feature]: [Brief description]\n"
+        "▶ [Detail]: [What happens upon inspection/interaction]\n"
+        "▷ [Sub-detail]: [Additional consequence if needed]\n\n"
+        
+        "FORMAT RULES:\n"
+        "- First part must be ONE PARAGRAPH description, not bullet points\n"
+        "- Maximum {max_features} main features using • symbol\n"
+        "- Use ▶ for inspection/interaction details\n"
+        "- Use ▷ for sub-details only when needed\n"
+        "- No extraneous sections or headers\n"
+        "- Be concise and focused on the encounter type\n"
+        "- For treasure: specific values (0-25gp small, 25-100gp medium, 200-500gp large)\n"
+        "- For DCs: only STR/DEX/CON/INT/WIS/CHA with values 9 (easy), 12 (normal), 15 (hard), 18 (impossible)\n\n"
+        
         "Original Content:\n{original_content}\n\n"
-        "Revised Version:"
+
     )
 }
 
@@ -203,14 +213,17 @@ PROMPT_TEMPLATES = {
 def get_prompt(template_name: str, context: Dict[str, Any]) -> str:
     """Retrieve and format prompt template with validation"""
     required_params = {
+        "history_summary": ["history_content"],
+        "faction_summary": ["faction_content"],
         "room_description": [
             "room_number", "room_type", "experience_type",
             "experience_desc", "encounter_type", "encounter_desc",
-            "max_features", "history", "faction_summary"
+            "max_features", "history_summary", "faction_summary"
         ],
         "room_quality_control": [
             "original_content", "max_features",
-            "experience_type", "encounter_type"
+            "experience_type", "encounter_type",
+            "experience_desc", "encounter_desc"
         ]
     }
 
@@ -224,4 +237,8 @@ def get_prompt(template_name: str, context: Dict[str, Any]) -> str:
         logger.warning(f"Missing parameters for {template_name}: {missing}")
         raise ValueError(f"Missing required parameters: {missing}")
 
-    return PROMPT_TEMPLATES[template_name].format(**context)
+    try:
+        return PROMPT_TEMPLATES[template_name].format(**context)
+    except KeyError as e:
+        logger.error(f"Template formatting error for {template_name}: {e}")
+        raise ValueError(f"Invalid template parameter: {e}")

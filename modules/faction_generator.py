@@ -57,7 +57,10 @@ def generate_factions(model: str, history_content: str, history_metadata: Dict[s
         doc_builder.write_section("factions", faction_content)
 
         logger.info("✅ Faction generation complete!")
-        return {"factions": factions, "metadata": metadata}
+        return {
+            "content": faction_content,
+            "metadata": metadata
+        }
     except Exception as e:
         logger.error(f"Faction generation failed: {str(e)}")
         return {"error": str(e)}

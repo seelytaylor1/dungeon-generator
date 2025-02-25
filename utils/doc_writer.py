@@ -29,36 +29,44 @@ class DocumentationBuilder:
         self.config = _load_config(config_path)
         self._validate_config()
         self.output_dir = self.config['output'].get('directory', 'docs')
+        self.sections = {}
 
     def _validate_config(self):
         """Validate required configuration elements"""
         if 'output' not in self.config:
             raise ValueError("Missing 'output' section in config")
+            
+        required_fields = ['directory', 'file', 'merge_order']
+        missing = [f for f in required_fields if f not in self.config['output']]
+        if missing:
+            raise ValueError(f"Missing required output fields: {', '.join(missing)}")
 
-        if 'file' not in self.config['output']:
-            raise ValueError("Missing required output field: 'file'")
-
-        # Set default merge_order if missing
-        if 'merge_order' not in self.config['output']:
-            self.config['output']['merge_order'] = [
-                mod['name'] for mod in self.config.get('modules', [])
-            ]
-            logging.warning("Using default merge order from module list")
+        # Validate section_config if present
+        if 'section_config' in self.config['output']:
+            for section, config in self.config['output']['section_config'].items():
+                if not isinstance(config, dict):
+                    raise ValueError(f"Invalid section config for {section}")
+                if 'title' not in config:
+                    raise ValueError(f"Missing title in section config for {section}")
 
     def ensure_output_dir(self):
         """Create output directory if needed"""
         os.makedirs(self.output_dir, exist_ok=True)
 
     def write_section(self, section_name: str, content: str) -> None:
-        """
-        Write section content using config-driven paths
-        """
+        """Write section content to both file and memory"""
         self.ensure_output_dir()
+        
+        # Store in memory
+        self.sections[section_name] = content
+        
+        # Write to individual file
         filename = os.path.join(self.output_dir, f"{section_name}.md")
-
         with open(filename, "w", encoding="utf-8") as f:
             f.write(content)
-        logging.info(f"Wrote {section_name} content to {filename}")
+            
+        # Immediately merge sections after writing
+        self.merge_sections()
 
     def merge_sections(self, debug_content: Optional[Dict] = None) -> LiteralString | str | bytes:
         """
@@ -96,13 +104,22 @@ class DocumentationBuilder:
 
     def _get_section_content(self, section_name: str, debug_content: Optional[Dict]) -> str:
         """Retrieve content from appropriate source"""
+        # First check in-memory sections
+        if section_name in self.sections:
+            return self.sections[section_name]
+
+        # Then check debug content
         if debug_content and section_name in debug_content:
             return debug_content[section_name].get('content', '')
 
+        # Finally check file system
         section_file = os.path.join(self.output_dir, f"{section_name}.md")
         if os.path.exists(section_file):
             with open(section_file, "r", encoding="utf-8") as fin:
-                return fin.read()
+                content = fin.read()
+                # Store in memory for future use
+                self.sections[section_name] = content
+                return content
 
         logging.warning(f"Missing content for section: {section_name}")
         return "*Section content missing*"

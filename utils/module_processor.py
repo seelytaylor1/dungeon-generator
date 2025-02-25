@@ -27,7 +27,12 @@ async def process_module(module_info, output_data, config, args):
         'model': lambda: module_info.get('model', config['models']['default']),
         'history_content': lambda: output_data.get('history', {}).get('content', ''),
         'history_metadata': lambda: output_data.get('history', {}).get('metadata'),
-        'faction_content': lambda: output_data.get('faction', {}).get('content', ''),
+        'faction_content': lambda: (
+            logging.debug(f"Faction data: {output_data.get('faction', {})}") or
+            output_data.get('faction', {}).get('content') or
+            output_data.get('factions', {}).get('content') or  # Try alternate key
+            ''
+        ),
         'world_context': lambda: (
             f"Dungeon History:\n{output_data.get('history', {}).get('content', '')}\n\n"
             f"Active Factions:\n{output_data.get('faction', {}).get('content', '')}"
@@ -38,6 +43,14 @@ async def process_module(module_info, output_data, config, args):
         'existing_data': lambda: output_data,
         'metadata': lambda: output_data.get('dungeon_map', {}).get('metadata') or {},
     }
+
+    # Add debug logging for parameter resolution
+    for param in module_info.get('required_params', []):
+        if param in param_resolvers:
+            value = param_resolvers[param]()
+            logging.debug(f"Resolved parameter {param}: {str(value)[:100]}...")
+        else:
+            logging.warning(f"⚠️ Unknown parameter: {param}")
 
     try:
         module = importlib.import_module(f"modules.{module_name}_generator")

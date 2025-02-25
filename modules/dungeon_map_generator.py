@@ -1,452 +1,518 @@
 import random
-import math
 import uuid
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
+import math
 from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass, asdict
-from utils.doc_writer import DocumentationBuilder
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
 
-# Configuration Constants =====================================================
-GRID_WIDTH = 8.5  # Standard US letter width in inches
-GRID_HEIGHT = 11  # Standard US letter height in inches
-DICE_TYPES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20']
-DICE_ROOM_TYPES = {
-    'd4': 'Small side room or larger corridor',
-    'd6': 'Rectangular chamber',
-    'd8': 'Irregularly-shaped chamber',
-    'd10': 'Main objective or passage leading deeper',
-    'd12': 'Special feature (river, chasm, tunnel)',
-    'd20': 'Grand hall or important chamber'
-}
+# Constants
+PAPER_WIDTH = 8.5  # Standard US letter width
+PAPER_HEIGHT = 11  # Standard US letter height
+GRID_WIDTH = 17  # Double the paper width, rounded to integer
+GRID_HEIGHT = 22  # Double the paper height, rounded to integer
+GRID_CELLS = GRID_WIDTH * GRID_HEIGHT
 
-POSITION_JITTER = 1.2
-CLUSTER_SPREAD = 2.0
-MARGIN = 0.5
-ZOOM_FACTOR = 1.0  # Factor to zoom out the view
-
-
-# Data Structures =============================================================
 @dataclass
-class Node:
+class GridCell:
+    uid: str
+    x: int
+    y: int
+    occupied: bool = False
+    room_id: Optional[str] = None
+
+@dataclass
+class Room:
     id: str
-    dice: str
+    position: Tuple[int, int]
     room_type: str
-    position: Tuple[float, float]
-    sub_nodes: List['Node']
-    is_entrance: bool
-    key: Optional[str]
-    description: Optional[str] = None
-    connections: int = 0
-
+    connections: List[str] = None
+    is_entrance: bool = False
+    is_terminus: bool = False
+    loop_color: Optional[str] = None
 
 @dataclass
-class Edge:
+class Connection:
     start_id: str
     end_id: str
+    type: str = "path"  # path, junction, or crossing
 
+class DungeonGridManager:
+    def __init__(self):
+        self.grid = self._initialize_grid()
+        self.rooms: List[Room] = []
+        self.connections: List[Connection] = []
+        
+    def _initialize_grid(self) -> List[List[GridCell]]:
+        """Create a 16x22 grid of cells."""
+        grid = []
+        for y in range(GRID_HEIGHT):
+            row = []
+            for x in range(GRID_WIDTH):
+                cell = GridCell(
+                    uid=str(uuid.uuid4()),
+                    x=x,
+                    y=y
+                )
+                row.append(cell)
+            grid.append(row)
+        return grid
 
-@dataclass
-class Junction:
-    point: Tuple[float, float]
-    edges: Tuple[str, str, str, str]
-    type: str
+    def place_rooms(self, count: int = 15):
+        """Place specified number of rooms randomly on the grid."""
+        for _ in range(count):
+            while True:
+                x = random.randint(1, GRID_WIDTH-2)
+                y = random.randint(1, GRID_HEIGHT-2)
+                if not self.grid[y][x].occupied:
+                    room = Room(
+                        id=str(uuid.uuid4()),
+                        position=(x, y),
+                        room_type="chamber"
+                    )
+                    self.rooms.append(room)
+                    self._mark_cell_occupied(x, y, room.id)
+                    break
 
+    def designate_special_rooms(self):
+        """Randomly designate entrance and terminus rooms."""
+        available_rooms = [r for r in self.rooms]
+        
+        # Select entrance
+        entrance = random.choice(available_rooms)
+        entrance.room_type = "entrance"
+        entrance.is_entrance = True
+        available_rooms.remove(entrance)
+        
+        # Select terminus
+        terminus = random.choice(available_rooms)
+        terminus.room_type = "terminus"
+        terminus.is_terminus = True
 
-# Core Generation Functions ===================================================
+    def connect_path_to_terminus(self):
+        """Create a path from entrance to terminus."""
+        entrance = next(r for r in self.rooms if r.is_entrance)
+        terminus = next(r for r in self.rooms if r.is_terminus)
+        current = entrance
+        visited = {current.id}
+        
+        while current.id != terminus.id:
+            # Find unvisited room closest to terminus
+            unvisited = [r for r in self.rooms if r.id not in visited]
+            if not unvisited:
+                break
+                
+            next_room = min(unvisited, 
+                key=lambda r: self._manhattan_distance(r.position, terminus.position))
+            
+            self.connections.append(Connection(current.id, next_room.id))
+            current = next_room
+            visited.add(current.id)
 
-def simulate_dice_drops() -> List[Node]:
-    """Generate nodes with paper-constrained positions."""
-    dice_counts = {die: random.randint(1, 3) for die in DICE_TYPES}
-    nodes = []
-    main_center = (
-        GRID_WIDTH / 2 + random.uniform(-0.5, 0.5),
-        GRID_HEIGHT / 2 + random.uniform(-0.5, 0.5)
-    )
-    red_center = (
-        np.clip(main_center[0] + random.uniform(-CLUSTER_SPREAD, CLUSTER_SPREAD),
-                MARGIN, GRID_WIDTH - MARGIN),
-        np.clip(main_center[1] + random.uniform(-CLUSTER_SPREAD, CLUSTER_SPREAD),
-                MARGIN, GRID_HEIGHT - MARGIN)
-    )
-    blue_center = (
-        np.clip(main_center[0] + random.uniform(-CLUSTER_SPREAD, CLUSTER_SPREAD),
-                MARGIN, GRID_WIDTH - MARGIN),
-        np.clip(main_center[1] + random.uniform(-CLUSTER_SPREAD, CLUSTER_SPREAD),
-                MARGIN, GRID_HEIGHT - MARGIN)
-    )
-    for dice, count in dice_counts.items():
-        for i in range(count):
-            if dice in ['d6', 'd8', 'd10', 'd12', 'd20']:
-                center = red_center if i == 0 else blue_center
-                x = np.clip(center[0] + random.uniform(-POSITION_JITTER, POSITION_JITTER),
-                            MARGIN, GRID_WIDTH - MARGIN)
-                y = np.clip(center[1] + random.uniform(-POSITION_JITTER, POSITION_JITTER),
-                            MARGIN, GRID_HEIGHT - MARGIN)
-            else:
-                x = np.clip(random.uniform(MARGIN, GRID_WIDTH - MARGIN),
-                            MARGIN, GRID_WIDTH - MARGIN)
-                y = np.clip(random.uniform(MARGIN, GRID_HEIGHT - MARGIN),
-                            MARGIN, GRID_HEIGHT - MARGIN)
-            nodes.append(Node(
-                id=str(uuid.uuid4()),
-                dice=dice,
-                room_type="",
-                position=(x, y),
-                sub_nodes=[],
-                is_entrance=False,
-                key=None,
+    def connect_rooms_to_entrance(self):
+        """Connect unconnected rooms back to entrance."""
+        entrance = next(r for r in self.rooms if r.is_entrance)
+        connected = {c.start_id for c in self.connections} | {c.end_id for c in self.connections}
+        
+        for room in self.rooms:
+            if room.id not in connected:
+                self.connections.append(Connection(room.id, entrance.id))
+
+    def connect_remaining_rooms(self):
+        """Connect any remaining unconnected rooms to nearest neighbors."""
+        connected = {c.start_id for c in self.connections} | {c.end_id for c in self.connections}
+        
+        for room in self.rooms:
+            if room.id not in connected:
+                other_rooms = [r for r in self.rooms if r.id != room.id]
+                nearest = min(other_rooms,
+                    key=lambda r: self._manhattan_distance(r.position, room.position))
+                self.connections.append(Connection(room.id, nearest.id))
+
+    def detect_junctions_and_crossings(self):
+        """Detect where paths overlap or cross through rooms."""
+        # Convert connections to line segments for intersection checking
+        segments = []
+        for conn in self.connections:
+            start_room = next(r for r in self.rooms if r.id == conn.start_id)
+            end_room = next(r for r in self.rooms if r.id == conn.end_id)
+            segments.append((
+                start_room.position,
+                end_room.position,
+                conn
             ))
-    logger.debug(f"Generated {len(nodes)} nodes with dice counts: {dice_counts}")
-    return nodes
 
+        # Check all pairs of segments for intersections
+        for i, (start1, end1, conn1) in enumerate(segments):
+            for j, (start2, end2, conn2) in enumerate(segments[i+1:], i+1):
+                if self._segments_intersect(start1, end1, start2, end2):
+                    intersection_point = self._get_intersection_point(
+                        start1, end1, start2, end2
+                    )
+                    
+                    # Check if intersection is at a room
+                    intersected_room = self._find_room_at_point(intersection_point)
+                    
+                    if intersected_room:
+                        # Mark as crossing if intersection is at a room
+                        conn1.type = "crossing"
+                        conn2.type = "crossing"
+                        logger.debug(f"Crossing detected at room {intersected_room.id}")
+                    else:
+                        # Mark as junction if intersection is between rooms
+                        conn1.type = "junction"
+                        conn2.type = "junction"
+                        logger.debug(f"Junction detected at {intersection_point}")
 
-def _process_nodes(nodes: List[Node]) -> List[Node]:
-    """Apply post-processing to generated nodes."""
-    entrance_set = False
-    for i, node in enumerate(nodes, start=1):
-        node.room_type = DICE_ROOM_TYPES[node.dice]
-        node.key = f"Room {i}"
-        if node.dice == 'd4' and not entrance_set:
-            node.is_entrance = True
-            entrance_set = True
-        node.description = f"A {node.room_type.lower()}."
-        logger.debug(f"{node.key}: {node.description}")
-    return nodes
+    def generate_map_content(self) -> Dict[str, Any]:
+        """Generate map content for documentation."""
+        content = {
+            "rooms": [],
+            "connections": [],
+            "junctions": [],
+            "crossings": []
+        }
+        
+        # Process rooms
+        for i, room in enumerate(self.rooms, 1):
+            room_data = {
+                "id": room.id,
+                "number": i,
+                "type": room.room_type,
+                "position": room.position,
+                "is_entrance": room.is_entrance,
+                "is_terminus": room.is_terminus,
+                "loop_color": room.loop_color
+            }
+            content["rooms"].append(room_data)
+            
+        # Add ALL connections to the connections list
+        for conn in self.connections:
+            conn_data = {
+                "start": conn.start_id,
+                "end": conn.end_id,
+                "type": conn.type
+            }
+            content["connections"].append(conn_data)
+            
+            # Also add to specific type lists if applicable
+            if conn.type == "junction":
+                content["junctions"].append(conn_data)
+            elif conn.type == "crossing":
+                content["crossings"].append(conn_data)
+                
+        return content
 
-
-def segment_intersection(a: Tuple[float, float], b: Tuple[float, float],
-                         c: Tuple[float, float], d: Tuple[float, float]) -> Optional[Tuple[float, float]]:
-    """Detect segment intersections with endpoint checking."""
-
-    def ccw(A, B, C):
-        return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
-
-    intersect = ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d)
-    if not intersect:
-        return None
-    A = np.array(a)
-    B = np.array(b)
-    C = np.array(c)
-    D = np.array(d)
-    BA = B - A
-    DC = D - C
-    denom = BA[0] * DC[1] - BA[1] * DC[0]
-    if denom == 0:
-        return None  # Parallel
-    t = ((C[0] - A[0]) * DC[1] - (C[1] - A[1]) * DC[0]) / denom
-    u = ((C[0] - A[0]) * BA[1] - (C[1] - A[1]) * BA[0]) / denom
-    if 0 < t < 1 and 0 < u < 1:
-        return float(A[0] + t * BA[0]), float(A[1] + t * BA[1])
-    return None
-
-
-def create_loops_and_connect(nodes: List[Node]) -> Tuple[List[Edge], List[Dict[str, Any]]]:
-    """Create interconnected loops with organic connections."""
-    edges: List[Edge] = []
-    junctions: List[Dict[str, Any]] = []
-    loops = []
-    nodes_by_dice = {d: [] for d in DICE_TYPES}
-    for node in nodes:
-        nodes_by_dice[node.dice].append(node)
-    # Create red and blue loops
-    for color in ['red', 'blue']:
-        try:
-            loop_nodes = [
-                nodes_by_dice['d6'][0 if color == 'red' else 1],
-                nodes_by_dice['d8'][0 if color == 'red' else 1],
-                nodes_by_dice['d10'][0 if color == 'red' else 1],
-                nodes_by_dice['d12'][0 if color == 'red' else 1],
-                nodes_by_dice['d20'][0 if color == 'red' else 1]
-            ]
-            for i in range(len(loop_nodes)):
-                start = loop_nodes[i]
-                end = loop_nodes[(i + 1) % len(loop_nodes)]
-                edges.append(Edge(start.id, end.id))
-            loops.append({
-                'color': color,
-                'node_ids': [n.id for n in loop_nodes],
-                'keys': [n.key for n in loop_nodes]
-            })
-        except IndexError:
-            logger.warning(f"Missing nodes for {color} loop")
-    # Connect free nodes
-    used_ids = {nid for loop in loops for nid in loop['node_ids']}
-    free_nodes = [n for n in nodes if n.id not in used_ids]
-    for free in free_nodes:
-        candidates = [n for n in nodes if n.id != free.id]
-        if candidates:
-            closest = min(candidates, key=lambda n: math.dist(free.position, n.position))
-            if not any((free.id, closest.id) in {(e.start_id, e.end_id), (e.end_id, e.start_id)} for e in edges):
-                edges.append(Edge(free.id, closest.id))
-    # Detect intersections
-    for i in range(len(edges)):
-        for j in range(i + 1, len(edges)):
-            e1, e2 = edges[i], edges[j]
-            if {e1.start_id, e1.end_id} & {e2.start_id, e2.end_id}:
-                continue
-            a = next(n.position for n in nodes if n.id == e1.start_id)
-            b = next(n.position for n in nodes if n.id == e1.end_id)
-            c = next(n.position for n in nodes if n.id == e2.start_id)
-            d = next(n.position for n in nodes if n.id == e2.end_id)
-            if point := segment_intersection(a, b, c, d):
-                junctions.append({
-                    'point': point,
-                    'edges': (e1.start_id, e1.end_id, e2.start_id, e2.end_id),
-                    'type': 'crossing' if random.random() < 0.7 else 'junction'
-                })
-    return edges, junctions
-
-
-def connect_clusters(nodes: List[Node], edges: List[Edge]) -> List[Edge]:
-    """Ensure connectivity with organic bridging."""
-    G = nx.Graph()
-    G.add_nodes_from(n.id for n in nodes)
-    G.add_edges_from((e.start_id, e.end_id) for e in edges)
-    extra_edges = []
-    components = list(nx.connected_components(G))
-    while len(components) > 1:
-        closest = None
-        min_dist = float('inf')
-        for i in range(len(components)):
-            for j in range(i + 1, len(components)):
-                for n1 in components[i]:
-                    pos1 = next(n.position for n in nodes if n.id == n1)
-                    for n2 in components[j]:
-                        pos2 = next(n.position for n in nodes if n.id == n2)
-                        if (dist := math.dist(pos1, pos2)) < min_dist:
-                            min_dist = dist
-                            closest = (n1, n2)
-        if closest:
-            extra_edges.append(Edge(*closest))
-            G.add_edge(*closest)
-            components = list(nx.connected_components(G))
-    for _ in range(random.randint(1, 2)):
-        n1, n2 = random.sample(nodes, 2)
-        if not G.has_edge(n1.id, n2.id):
-            extra_edges.append(Edge(n1.id, n2.id))
-            G.add_edge(n1.id, n2.id)
-    return extra_edges
-
-
-def save_graph_image(nodes: List[Dict], edges: List[Dict], loops: List[Dict],
-                     image_filename: str = "docs/dungeon_graph.png", zoom_factor: float = ZOOM_FACTOR):
-    """Visualize with a centered, zoomed-out layout."""
-    plt.figure(figsize=(GRID_WIDTH, GRID_HEIGHT), dpi=300)
-    G = nx.Graph()
-    pos = {}
-    node_colors = []
-
-    # Create graph structure
-    for node in nodes:
-        label = node['key']
-        G.add_node(label)
-        pos[label] = node['position']
-        if node['is_entrance']:
-            node_colors.append('#90EE90')  # Light green for entrance
-        else:
-            # Determine node color based on loop membership
-            in_red = any(node['id'] in loop['node_ids'] for loop in loops if loop.get('color') == 'red')
-            in_blue = any(node['id'] in loop['node_ids'] for loop in loops if loop.get('color') == 'blue')
-            if in_red and in_blue:
-                node_colors.append('#FFB6C1')  # Pink for overlap
-            elif in_red:
-                node_colors.append('#FF9999')  # Red
-            elif in_blue:
-                node_colors.append('#99CCFF')  # Blue
+    def save_map_visualization(self, filename: str = "docs/dungeon_map.png"):
+        """Generate and save the map visualization."""
+        plt.figure(figsize=(PAPER_WIDTH, PAPER_HEIGHT), dpi=300)  # Use paper dimensions
+        
+        # Create networkx graph
+        G = nx.Graph()
+        pos = {}
+        node_colors = []
+        
+        # Add nodes (rooms)
+        for room in self.rooms:
+            G.add_node(room.id)
+            pos[room.id] = room.position
+            
+            # Determine node color
+            if room.is_entrance:
+                color = '#90EE90'  # Light green
+            elif room.is_terminus:
+                color = '#FFB6C1'  # Pink
+            elif room.loop_color == 'red':
+                color = '#FF9999'  # Red
+            elif room.loop_color == 'blue':
+                color = '#99CCFF'  # Blue
             else:
-                node_colors.append('#F0F0F0')  # Gray for neutral
+                color = '#F0F0F0'  # Gray
+            node_colors.append(color)
+        
+        # Add edges (connections)
+        edge_colors = []
+        for conn in self.connections:
+            G.add_edge(conn.start_id, conn.end_id)
+            if conn.type == "junction":
+                edge_colors.append('orange')
+            elif conn.type == "crossing":
+                edge_colors.append('purple')
+            else:
+                edge_colors.append('gray')
+        
+        # Draw the graph with larger nodes and text
+        nx.draw_networkx_nodes(G, pos, 
+            node_color=node_colors, 
+            node_size=500,  # Increased from 200
+            edgecolors='black', 
+            linewidths=1.0  # Increased from 0.5
+        )
+        nx.draw_networkx_edges(G, pos, 
+            edge_color=edge_colors, 
+            width=1.5,  # Increased from 1
+            alpha=0.7
+        )
+        nx.draw_networkx_labels(G, pos, 
+            {room.id: str(i+1) for i, room in enumerate(self.rooms)},
+            font_size=8,  # Increased from 6
+            font_family='sans-serif',
+            font_weight='bold'  # Added bold
+        )
+        
+        plt.grid(True, linestyle='--', alpha=0.3)
+        plt.title("Dungeon Map", fontsize=8)
+        plt.axis('off')
+        plt.tight_layout(pad=0.3)
+        plt.savefig(filename, bbox_inches='tight')
+        plt.close()
 
-    # Add edges to graph
-    for edge in edges:
-        start = next(n['key'] for n in nodes if n['id'] == edge['start_id'])
-        end = next(n['key'] for n in nodes if n['id'] == edge['end_id'])
-        G.add_edge(start, end)
+    # Helper methods
+    def _mark_cell_occupied(self, x: int, y: int, room_id: str):
+        """Mark a grid cell as occupied by a room."""
+        self.grid[y][x].occupied = True
+        self.grid[y][x].room_id = room_id
 
-    # Draw elements
-    nx.draw_networkx_nodes(
-        G, pos,
-        node_color=node_colors,
-        node_size=200,
-        edgecolors='black',
-        linewidths=0.5
-    )
-    nx.draw_networkx_edges(
-        G, pos,
-        edge_color='gray',
-        width=1,
-        alpha=0.7
-    )
-    nx.draw_networkx_labels(
-        G, pos,
-        font_size=6,
-        font_family='sans-serif'
-    )
+    def _manhattan_distance(self, pos1: Tuple[int, int], pos2: Tuple[int, int]) -> int:
+        """Calculate Manhattan distance between two points."""
+        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
 
-    # Set view parameters
-    x_coords = [p[0] for p in pos.values()]
-    y_coords = [p[1] for p in pos.values()]
-    x_center = (min(x_coords) + max(x_coords)) / 2
-    y_center = (min(y_coords) + max(y_coords)) / 2
-    width = (max(x_coords) - min(x_coords)) * zoom_factor
-    height = (max(y_coords) - min(y_coords)) * zoom_factor
+    def _segments_intersect(self, start1, end1, start2, end2) -> bool:
+        """Check if two line segments intersect."""
+        def ccw(A, B, C):
+            return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
+        
+        return (ccw(start1, start2, end2) != ccw(end1, start2, end2) and 
+                ccw(start1, end1, start2) != ccw(start1, end1, end2))
 
-    plt.xlim(x_center - width / 2, x_center + width / 2)
-    plt.ylim(y_center - height / 2, y_center + height / 2)
-    plt.title("Dungeon Map", fontsize=8)
-    plt.axis('off')
-    plt.tight_layout(pad=0.3)
-    plt.savefig(image_filename, bbox_inches='tight')
-    plt.close()
+    def _get_intersection_point(self, start1, end1, start2, end2) -> Tuple[int, int]:
+        """Calculate the intersection point of two line segments."""
+        # Simple approximation - average of midpoints
+        mid1 = ((start1[0] + end1[0])//2, (start1[1] + end1[1])//2)
+        mid2 = ((start2[0] + end2[0])//2, (start2[1] + end2[1])//2)
+        return ((mid1[0] + mid2[0])//2, (mid1[1] + mid2[1])//2)
 
+    def _find_room_at_point(self, point: Tuple[int, int]) -> Optional[Room]:
+        """Find if there's a room at the given point."""
+        x, y = point
+        if 0 <= y < GRID_HEIGHT and 0 <= x < GRID_WIDTH:
+            cell = self.grid[y][x]
+            if cell.occupied:
+                return next((r for r in self.rooms if r.id == cell.room_id), None)
+        return None
 
-def _format_room_list(nodes: List[Dict]) -> str:
-    """Generate Markdown list of rooms with sequential numbering."""
-    return "\n".join(
-        f"- **{n['key']}**: {n['room_type']}"  # Changed from n['id'] to n['key']
-        for n in sorted(nodes, key=lambda x: int(x['key'].split()[-1]))
-    )
+    def _get_room_number(self, room_id: str) -> int:
+        """Helper method to get room number from room ID."""
+        for i, room in enumerate(self.rooms, 1):
+            if room.id == room_id:
+                return i
+        return 0  # Return 0 if room not found
 
+    def create_loop(self, color: str, center_x: int, center_y: int):
+        """Create a 5-room loop around a center point."""
+        loop_rooms = []
+        angles = [0, 72, 144, 216, 288]  # 360/5 degrees spacing
+        radius = 3  # Distance from center
+        
+        for angle in angles:
+            while True:
+                # Convert polar to grid coordinates
+                rad = math.radians(angle)
+                x = int(center_x + radius * math.cos(rad))
+                y = int(center_y + radius * math.sin(rad))
+                
+                # Ensure within bounds
+                x = max(1, min(x, GRID_WIDTH-2))
+                y = max(1, min(y, GRID_HEIGHT-2))
+                
+                if not self.grid[y][x].occupied:
+                    room = Room(
+                        id=str(uuid.uuid4()),
+                        position=(x, y),
+                        room_type="chamber",
+                        loop_color=color
+                    )
+                    loop_rooms.append(room)
+                    self._mark_cell_occupied(x, y, room.id)
+                    break
+        
+        # Connect rooms in loop
+        for i in range(len(loop_rooms)):
+            start = loop_rooms[i]
+            end = loop_rooms[(i + 1) % len(loop_rooms)]
+            self.connections.append(Connection(start.id, end.id))
+        
+        self.rooms.extend(loop_rooms)
+        return loop_rooms
 
-def _format_connection_list(edges: List[Dict], nodes: List[Node]) -> str:
-    """Generate connection list with room names using dictionary indexing."""
-    id_to_key = {n.id: n.key for n in nodes}
-    return "\n".join(
-        f"- {id_to_key[e['start_id']]} to {id_to_key[e['end_id']]}"
-        for e in edges
-    )
+    def place_special_rooms(self):
+        """Place entrance and terminus rooms."""
+        # Place entrance near bottom
+        entrance_y = GRID_HEIGHT - 4
+        entrance_x = int(GRID_WIDTH/4)
+        
+        # Place terminus near top
+        terminus_y = 4
+        terminus_x = int(3*GRID_WIDTH/4)
+        
+        entrance = Room(
+            id=str(uuid.uuid4()),
+            position=(entrance_x, entrance_y),
+            room_type="entrance",
+            is_entrance=True
+        )
+        
+        terminus = Room(
+            id=str(uuid.uuid4()),
+            position=(terminus_x, terminus_y),
+            room_type="terminus",
+            is_terminus=True
+        )
+        
+        self.rooms.extend([entrance, terminus])
+        self._mark_cell_occupied(entrance_x, entrance_y, entrance.id)
+        self._mark_cell_occupied(terminus_x, terminus_y, terminus.id)
+        return entrance, terminus
 
-
-def _format_junction_list(junctions: List[Dict], edges: List[Dict], nodes: List[Node]) -> str:
-    """Format junction details with room relationships."""
-    id_to_key = {n.id: n.key for n in nodes}
-    edge_map = {(e['start_id'], e['end_id']): (id_to_key[e['start_id']], id_to_key[e['end_id']]) for e in edges}
-    return "\n".join(
-        f"- {j['type'].title()} at ({j['point'][0]:.1f}, {j['point'][1]:.1f}) connecting "
-        f"{edge_map[(j['edges'][0], j['edges'][1])]} and {edge_map[(j['edges'][2], j['edges'][3])]}"
-        for j in junctions
-    )
-
-
-def _format_loop_list(loops: List[Dict], nodes: List[Node]) -> str:
-    """Format loop information."""
-    id_to_key = {n.id: n.key for n in nodes}
-    return "\n".join(
-        f"- {loop['color'].title()} Loop: {', '.join(id_to_key[nid] for nid in loop['node_ids'])}"
-        for loop in loops
-    )
-
+    def add_loose_rooms(self, count: int = 2):
+        """Add loose rooms - one connects loops, one connects to nearest neighbor."""
+        # First loose room connects between loops
+        red_rooms = [r for r in self.rooms if r.loop_color == 'red']
+        blue_rooms = [r for r in self.rooms if r.loop_color == 'blue']
+        
+        # Find centers of loops
+        red_center = (sum(r.position[0] for r in red_rooms)/5, 
+                     sum(r.position[1] for r in red_rooms)/5)
+        blue_center = (sum(r.position[0] for r in blue_rooms)/5,
+                      sum(r.position[1] for r in blue_rooms)/5)
+        
+        # Place first room between loops
+        mid_x = int((red_center[0] + blue_center[0])/2)
+        mid_y = int((red_center[1] + blue_center[1])/2)
+        
+        # Add some randomness to the midpoint
+        mid_x += random.randint(-2, 2)
+        mid_y += random.randint(-2, 2)
+        
+        if not self.grid[mid_y][mid_x].occupied:
+            connector_room = Room(
+                id=str(uuid.uuid4()),
+                position=(mid_x, mid_y),
+                room_type="loose_chamber"
+            )
+            self._mark_cell_occupied(mid_x, mid_y, connector_room.id)
+            
+            # Connect to closest room in each loop
+            red_nearest = min(red_rooms,
+                key=lambda r: self._manhattan_distance(r.position, connector_room.position))
+            blue_nearest = min(blue_rooms,
+                key=lambda r: self._manhattan_distance(r.position, connector_room.position))
+            
+            self.connections.append(Connection(connector_room.id, red_nearest.id))
+            self.connections.append(Connection(connector_room.id, blue_nearest.id))
+            self.rooms.append(connector_room)
+        
+        # Second loose room connects to nearest neighbor
+        while True:
+            x = random.randint(1, GRID_WIDTH-2)
+            y = random.randint(1, GRID_HEIGHT-2)
+            if not self.grid[y][x].occupied:
+                room = Room(
+                    id=str(uuid.uuid4()),
+                    position=(x, y),
+                    room_type="loose_chamber"
+                )
+                self._mark_cell_occupied(x, y, room.id)
+                
+                # Find nearest room
+                other_rooms = [r for r in self.rooms if r.id != room.id]
+                nearest = min(other_rooms,
+                    key=lambda r: self._manhattan_distance(r.position, room.position))
+                
+                self.connections.append(Connection(room.id, nearest.id))
+                self.rooms.append(room)
+                break
 
 def generate_dungeon_map(*args, **kwargs) -> Dict[str, Any]:
-    """Main generation process with error handling."""
-    result: Dict[str, Any] = {
-        "content": "",
-        "metadata": {
-            "nodes": [],
-            "edges": [],
-            "junctions": [],
-            "loops": [],
-            "seed": None,
-            "stats": {
-                "total_rooms": 0,
-                "connections": 0,
-                "entrances": 0,
-                "crossings": 0,
-                "junctions": 0
+    """Main generation function."""
+    try:
+        logger.info("🗺️ Starting dungeon map generation...")
+        
+        dungeon = DungeonGridManager()
+        
+        # Create red loop in bottom left quadrant
+        red_loop = dungeon.create_loop('red', int(GRID_WIDTH/4), int(3*GRID_HEIGHT/4))
+        
+        # Create blue loop in top right quadrant
+        blue_loop = dungeon.create_loop('blue', int(3*GRID_WIDTH/4), int(GRID_HEIGHT/4))
+        
+        # Add entrance and terminus
+        entrance, terminus = dungeon.place_special_rooms()
+        
+        # Connect entrance to red loop and terminus to blue loop
+        red_room = min(red_loop, key=lambda r: dungeon._manhattan_distance(r.position, entrance.position))
+        blue_room = min(blue_loop, key=lambda r: dungeon._manhattan_distance(r.position, terminus.position))
+        dungeon.connections.append(Connection(entrance.id, red_room.id))
+        dungeon.connections.append(Connection(terminus.id, blue_room.id))
+        
+        # Add loose rooms
+        dungeon.add_loose_rooms(2)
+        
+        dungeon.detect_junctions_and_crossings()
+        
+        # Generate content and visualization
+        content = dungeon.generate_map_content()
+        dungeon.save_map_visualization()
+
+        # Create nodes list for dungeon content generator
+        nodes = []
+        for i, room in enumerate(dungeon.rooms, 1):
+            nodes.append({
+                "key": f"Room {i}",
+                "room_type": room.room_type,
+                "position": room.position,
+                "is_entrance": room.is_entrance,
+                "is_terminus": room.is_terminus,
+                "loop_color": room.loop_color
+            })
+        
+        # Format for documentation
+        doc_content = (
+            "## Dungeon Map\n\n"
+            "### Rooms\n" +
+            "\n".join(f"- Room {r['number']}: {r['type']}" 
+                     for r in content['rooms']) +
+            "\n\n### Connections\n" +
+            "\n".join(f"- Room {dungeon._get_room_number(c['start'])} to Room {dungeon._get_room_number(c['end'])}"
+                     for c in content['connections']) +
+            "\n\n### Junctions\n" +
+            "\n".join(f"- Junction between paths Room {dungeon._get_room_number(j['start'])} - Room {dungeon._get_room_number(j['end'])}"
+                     for j in content['junctions']) +
+            "\n\n### Crossings\n" +
+            "\n".join(f"- Crossing at Room {dungeon._get_room_number(c['start'])} with path to Room {dungeon._get_room_number(c['end'])}"
+                     for c in content['crossings']) +
+            "\n\n![Dungeon Map](./dungeon_map.png)"
+        )
+        
+        # Write to documentation
+        from utils.doc_writer import DocumentationBuilder
+        doc_builder = DocumentationBuilder()
+        doc_builder.write_section("dungeon_map", doc_content)
+        
+        return {
+            "content": doc_content,
+            "metadata": {
+                "nodes": nodes,  # Add nodes list to metadata
+                "connections": content['connections'],
+                "junctions": content['junctions'],
+                "crossings": content['crossings']
             }
         }
-    }
-    try:
-        logger.info("🗺️ Starting dungeon generation...")
-        seed = random.randint(0, 100000)
-        random.seed(seed)
-
-        nodes = simulate_dice_drops()
-        nodes = _process_nodes(nodes)
-
-        edges, junctions = create_loops_and_connect(nodes)
-        extra_edges = connect_clusters(nodes, edges)
-        edges.extend(extra_edges)
-
-        # Convert junctions to objects.
-        junction_objects = [
-            Junction(
-                point=j['point'],
-                edges=j['edges'],
-                type=j['type']
-            ) for j in junctions
-        ]
-
-        # Detect loops using networkx cycle_basis.
-        edge_tuples = [(e.start_id, e.end_id) for e in edges]
-        G = nx.Graph(edge_tuples)
-        loops = [{'node_ids': cycle, 'color': 'red' if i == 0 else 'blue'}
-                 for i, cycle in enumerate(nx.cycle_basis(G)) if len(cycle) >= 3]
-
-        result['metadata'].update({
-            "nodes": [asdict(n) for n in nodes],
-            "edges": [asdict(e) for e in edges],
-            "junctions": [asdict(j) for j in junction_objects],
-            "loops": loops,
-            "seed": seed,
-            "stats": {
-                "total_rooms": len(nodes),
-                "connections": len(edges),
-                "entrances": sum(1 for n in nodes if n.is_entrance),
-                "crossings": sum(1 for j in junction_objects if j.type == 'crossing'),
-                "junctions": len(junction_objects)
-            }
-        })
-
-        # Build detailed lists for output.
-        room_list = _format_room_list(result['metadata']['nodes'])
-        connection_list = _format_connection_list(result['metadata']['edges'], nodes)
-        junction_list = _format_junction_list(result['metadata']['junctions'], result['metadata']['edges'], nodes)
-        loop_list = _format_loop_list(result['metadata']['loops'], nodes)
-
-        stats = result['metadata']['stats']
-        stats_summary = (
-            f"Seed: {seed}\n"
-            f"Total Rooms: {stats['total_rooms']}\n"
-            f"Total Connections: {stats['connections']}\n"
-            f"Entrances: {stats['entrances']}\n"
-            f"Crossings: {stats['crossings']}\n"
-            f"Junctions: {stats['junctions']}\n"
-        )
-
-        dungeon_map_content = (
-            "## Dungeon Map Overview\n\n"
-            f"{stats_summary}\n\n"
-            "## Room Directory\n\n"
-            f"{room_list}\n\n"
-            "## Connections\n\n"
-            f"{connection_list}\n\n"
-            "## Junctions & Crossings\n\n"
-            f"{junction_list}\n\n"
-            "## Loops\n\n"
-            f"{loop_list}\n\n"
-            "## Map Visualization\n\n"
-            "![Dungeon Map](./dungeon_graph.png)"
-        )
-        doc_builder = DocumentationBuilder()
-        # Write detailed dungeon map content to dungeon_map.md.
-        doc_builder.write_section("dungeon_map", dungeon_map_content)
-        result["content"] = dungeon_map_content
-
-        # Save the dungeon map image.
-        save_graph_image(
-            result['metadata']['nodes'],
-            result['metadata']['edges'],
-            result['metadata']['loops']
-        )
-
+        
     except Exception as e:
-        logger.error(f"Generation failed: {str(e)}")
-        result['error'] = str(e)
-
-    return result
+        logger.error(f"Dungeon map generation failed: {str(e)}")
+        return {"error": str(e)}

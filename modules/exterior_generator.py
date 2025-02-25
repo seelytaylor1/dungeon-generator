@@ -11,26 +11,28 @@ from modules.prompts import EXTERIOR_PROMPTS
 logger = logging.getLogger(__name__)
 
 
-def extract_solution_content(text: str) -> str:
-    """Extract solution content between markers or return full text if no markers found."""
-    # First try to find content between solution markers
-    match = re.search(
-        r'<\|begin_of_solution\|>(.*?)<\|end_of_solution\|>',
-        text,
-        re.DOTALL
-    )
-    
-    if match:
-        return match.group(1).strip()
-    
-    # If no markers found, check if the text contains markdown sections
-    if '##' in text:
-        logger.warning("No solution markers found, but markdown sections present. Using full response.")
-        return text.strip()
-    
-    logger.error("No solution markers or markdown sections found in response")
-    logger.debug("Raw response: %s", text)
-    raise ValueError("Response does not contain required formatting")
+def extract_solution_content(response: str) -> str:
+    """Extract content between 'Solution Section' and end_of_solution tags."""
+    try:
+        # Find start of solution
+        solution_start = response.find("Solution Section")
+        if solution_start == -1:
+            raise ValueError("No 'Solution Section' found in response")
+            
+        # Move past the "Solution Section" header
+        content_start = solution_start + len("Solution Section")
+        
+        # Find end of solution
+        solution_end = response.find("<|end_of_solution|>")
+        if solution_end == -1:
+            raise ValueError("No end_of_solution tag found in response")
+            
+        # Extract and clean the solution content
+        return response[content_start:solution_end].strip()
+        
+    except Exception as e:
+        logger.error(f"Failed to extract solution content: {e}")
+        raise
 
 
 def generate_exterior(model: str, history_content: str, faction_content: str) -> Dict[str, Any]:

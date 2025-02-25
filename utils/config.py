@@ -21,10 +21,16 @@ config_schema = Schema({
         Optional('timeout'): And(int, lambda n: n > 0)
     }],
     'output': {
+        'directory': And(str, len),
         'file': And(str, len),
         Optional('sanitize'): bool,
-        Optional('merge_order'): [str],  # Made optional in latest version
-        Optional('directory'): And(str, len)
+        Optional('merge_order'): [str],
+        Optional('section_config'): {
+            str: {
+                'title': And(str, len),
+                Optional('required'): bool
+            }
+        }
     }
 })
 
@@ -34,7 +40,12 @@ def build_config():
     try:
         with open("config.json") as f:
             config = json.load(f)
-        return config_schema.validate(config)
-    except (FileNotFoundError, json.JSONDecodeError, SchemaError) as e:
-        logging.error(f"❌ Config error: {str(e)}")
+        validated_config = config_schema.validate(config)
+        logging.info("✅ Configuration validated successfully")
+        return validated_config
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        logging.error(f"❌ Config file error: {str(e)}")
+        return None
+    except SchemaError as e:
+        logging.error(f"❌ Config validation error: {str(e)}")
         return None
