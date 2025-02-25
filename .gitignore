@@ -36,3 +36,53 @@ backup/
 
 # Virtual Env  
 .venv
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Logs
+logs/
+*.log
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+
+# Environment variables
+.env
+.env.*
+
+# Local development settings
+local_settings.py
+
+# Dependency management
+poetry.lock
+Pipfile.lock
+
+# PyCharm additional files
+.idea/dataSources/
+.idea/dataSources.xml
+.idea/httpRequests/
+.idea/dictionaries/
+.idea/usage.statistics.xml
+.idea/shelf/
