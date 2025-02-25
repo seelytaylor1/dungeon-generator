@@ -33,3 +33,6 @@ documentation.md
 dungeon_graph.png
 docs/
 backup/
+
+# Virtual Env  
+.venv
