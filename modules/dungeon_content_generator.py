@@ -129,8 +129,12 @@ def generate_dungeon_content(
                 }
             )
 
+            logger.debug(f"Room {room_number} prompt:\n{llm_prompt[:500]}...")
+
             try:
                 raw_response = generate_with_retry(llm_prompt, model).get('response', '')
+                
+                logger.debug(f"Room {room_number} raw response:\n{raw_response[:500]}...")
                 
                 # Extract content between solution tags if present
                 content = _extract_solution_content(raw_response)
@@ -300,13 +304,21 @@ def _generate_summary(content: str, template_name: str, model: str) -> str:
     
     try:
         prompt = get_prompt(template_name, {"history_content": content, "faction_content": content})
+        logger.debug(f"Summary prompt for {template_name}:\n{prompt[:500]}...")
         result = generate_with_retry(prompt, model)
         
         if not result or not result.get('response'):
             return "Summary unavailable: empty response"
             
         # Clean any potential solution tags from summaries as well
-        return _extract_solution_content(result['response'])
+        summary = _extract_solution_content(result['response'])
+        
+        if result and 'response' in result:
+            logger.debug(f"Summary response for {template_name}:\n{result['response'][:500]}...")
+        else:
+            logger.debug(f"Empty or invalid response for {template_name} summary")
+        
+        return summary
         
     except Exception as e:
         logger.error(f"Summary generation failed: {str(e)}")

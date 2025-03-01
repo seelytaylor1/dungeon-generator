@@ -86,3 +86,6 @@ Pipfile.lock
 .idea/dictionaries/
 .idea/usage.statistics.xml
 .idea/shelf/
+
+# Image generation outputs
+docs/img/
