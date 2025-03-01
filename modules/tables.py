@@ -2508,27 +2508,27 @@ RANDOM_NAME = {
         "SHU"
     ],
     "nouns": [
-        "Blade", "Hammer", "Shield", "Heart", "Crown", "Stone", "Flame", "Storm",
+        "Blades", "Hammers", "Shields", "Heart", "Crown", "Stone", "Flame", "Storm",
         "Fang", "Claw", "Spear", "Helm", "Chalice", "Orb", "Tome", "Grimoire",
         "Runestone", "Totem", "Torch", "Sigil", "Wyrm", "Serpent", "Dragon",
-        "Dagger", "Axe", "Warhorn", "Gauntlet", "Banner", "Obsidian", "Sapphire",
-        "Ruby", "Emerald", "Onyx", "Ivory", "Glaive", "Pike", "Bracer", "Amulet",
-        "Talisman", "Scroll", "Relic", "Idol", "Coffer", "Vault", "Pyre", "Crypt",
-        "Tomb", "Sepulcher", "Cairn", "Censer", "Vestige", "Fetish", "Wraith",
-        "Revenant", "Shade", "Specter", "Phantom", "Ghoul", "Wight", "Lich",
+        "Daggers", "Axe", "Warhorn", "Gauntlet", "Banner", "Obsidian", "Sapphire",
+        "Rubies", "Emerald", "Onyx", "Ivory", "Glaive", "Pike", "Bracer", "Amulet",
+        "Talismans", "Scroll", "Relic", "Idol", "Coffer", "Vault", "Pyre", "Crypt",
+        "Tombs", "Sepulchers", "Cairn", "Censer", "Vestige", "Fetish", "Wraiths",
+        "Revenants", "Shades", "Specters", "Phantom", "Ghoul", "Wight", "Lich",
         "Doom", "Fury", "Wrath", "Havoc", "Thunder", "Tempest", "Gale", "Torrent",
         "Inferno", "Abyss", "Void", "Chasm", "Fissure", "Ruin", "Oblivion", "Eclipse",
-        "Corona", "Zephyr", "Basilisk", "Chimera", "Leviathan", "Manticore", "Gorgon",
-        "Cyclops", "Ogre", "Titan", "Colossus", "Sentinel", "Warden", "Overlord",
-        "Conqueror", "Warrior", "Slayer", "Executioner", "Champion", "Myrmidon",
+        "Corona", "Zephyr", "Basilisks", "Chimeras", "Leviathans", "Manticores", "Gorgons",
+        "Cyclops", "Ogres", "Titan", "Colossus", "Sentinel", "Warden", "Overlord",
+        "Conquerors", "Warriors", "Slayer", "Executioners", "Champion", "Myrmidon",
         "Legion", "Phalanx", "Spire", "Citadel", "Bastion", "Fortress", "Keep",
         "Labyrinth", "Maze", "Sanctum", "Temple", "Shrine", "Catacomb", "Monolith",
         "Pillar", "Obelisk", "Reliquary", "Coven", "Pact", "Cabal", "Oath",
         "Vow", "Blood", "Bone", "Flesh", "Marrow", "Ash", "Charcoal", "Furnace",
         "Forge", "Anvil", "Furnace", "Crucible", "Brand", "Carcanet", "Coronet",
         "Diadem", "Gorget", "Greave", "Hauberk", "Pauldron", "Vambrace", "Warlock",
-        "Sorcerer", "Witch", "Mystic", "Seer", "Oracle", "Prophet", "Harbinger",
-        "Nemesis", "Bane", "Scourge", "Pestilence", "Plague", "Venom", "Poison",
+        "Sorcerer", "Witches", "Mystics", "Seers", "Oracles", "Prophets", "Harbingers",
+        "Nemesis", "Banes", "Scourges", "Pestilence", "Plague", "Venom", "Poison",
         "Elixir", "Potion", "Draught", "Remedy", "Salve", "Tincture", "Hex",
         "Curse", "Omen", "Portent", "Augury", "Divination", "Fate", "Destiny",
         "Wyrd", "Twilight", "Dusk", "Dawn", "Midnight", "Noon", "Sun", "Moon",
@@ -2536,7 +2536,7 @@ RANDOM_NAME = {
         "Dream", "Reckoning", "Judgment", "Glory", "Honor", "Valor", "Virtue",
         "Sin", "Vice", "Treachery", "Betrayal", "Deception", "Guile", "Tyrant",
         "Despot", "Monarch", "Sovereign", "Usurper", "Wanderer", "Nomad", "Vagrant",
-        "Outlaw", "Brigand", "Marauder", "Raider", "Corsair", "Buccaneer", "Prowler"
+        "Outlaws", "Brigands", "Marauders", "Raiders", "Corsairs", "Buccaneers", "Prowlers"
     ],
     "verbs": [
         "Strike", "Rise", "Fall", "Shatter", "Forge", "Burn", "Whisper",
@@ -2582,7 +2582,6 @@ RANDOM_NAME = {
     ]
 }
 FACTION_TABLES = {
-    # Factions
     "goal": [
         "Domain. They are trying to consolidate power either in the dungeon or amongst themselves.",
         "Occult. They are seeking occult power.",

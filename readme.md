@@ -15,6 +15,7 @@ It leverages a combo of AI-driven prompts and random inputs to generate a dungeo
 - AI-generated, history-specific factions.
 - Procedurally created concept map of the dungeon.
 - AI-driven room descriptions. 
+- Flux.dev AI-powered image generation for dungeon rooms.
 
 ## Requirements
 Ensure you have Python 3 installed along with the required dependencies.
@@ -25,7 +26,7 @@ In addition, you'll need [Ollama](https://ollama.com) and a local model installe
 implements [openthinker:7b](https://ollama.com/library/openthinker), an uncensored distillation of deepseek-r1, as 
 the primary model. 
 
-![image](https://github.com/user-attachments/assets/322632f4-f76d-47cb-b57d-2ea48266dff5)
+
 
 ## Usage
 Run the generator with:
@@ -42,7 +43,7 @@ Specify `debug` if you want to skip the first three steps of generation.
 - Sometimes, the dungeon map adds nodes outside the view.
 - Hardcoded models, temperature, and context window.
 - Somewhat questionable room content outputs.
-
+- Image generation requires significant GPU memory (at least 8GB VRAM).
 
 ## Future Enhancements
 - Fix Known issues.
